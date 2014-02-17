@@ -1,2 +1,9 @@
 This will be a file of design notes. We can use it collaborate asynchronously. 
 
+
+Since LLVM is based on SSA, we can't just assign to an existing variable.
+Thus, we will need to add a subscript to every variable, so that we have
+things like x1, x2, x3, etc. This is something to think about a bit more.
+
+We'll probably also need to pass an environment of some sort, to handle
+closures. However, this may not be necessary right now. 
