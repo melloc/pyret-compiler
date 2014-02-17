@@ -1,0 +1,12 @@
+Things to do for compiler: 
+
+kechpaja: 
+ - Initial Pyret code to compile functions, calls, number, methods, variables, 
+   assigns, writing to stdout.
+
+
+melloc: 
+ - How to instantiate libgmp numbers (rationals), call libgmp functions, 
+   dynamically link against libgmp when compiling LLVM IR. 
+
+
