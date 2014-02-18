@@ -3,11 +3,11 @@
 provide *
 import file as F
 import "ast-anf.arr" as N
-import "llvm/llvm.arr" as L
-import "llvm/atomic.arr" as Atomic
-import "llvm/fcmp.arr" as Fcmp
-import "llvm/icmp.arr" as Icmp
-import "llvm/kind.arr" as Kind
+# import "llvm/llvm.arr" as L
+# import "llvm/atomic.arr" as Atomic
+# import "llvm/fcmp.arr" as Fcmp
+# import "llvm/icmp.arr" as Icmp
+# import "llvm/kind.arr" as Kind
 # Functions, calls, numbers, methods, variables, assigns, stdout
 
 
