@@ -20,3 +20,19 @@ possible paths that we could follow here:
 
  - On the other hand, it might be nice to do as much substitution as possible
    before we generate code, in which case we should keep them separate. 
+
+
+Random thoughts:
+
+All objects have:
+    - Type tag (uint32)
+    - Variant tag (uint32)
+    - vtables?
+    - just a struct with fields after that
+
+Closures:
+    - Find free variables
+    - Save references to appropriate variables in a record
+    - Allocate closure on heap
+    - Invocation of closure?
+
