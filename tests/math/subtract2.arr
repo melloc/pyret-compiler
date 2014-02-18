@@ -1,3 +1,4 @@
 #lang pyret
 
-1 + 2
+x = 7 - 5
+x

@@ -12,7 +12,7 @@ import "llvm/kind.arr" as Kind
 
 
 next-val = (fun():
-  var n = -1
+  var n = 0
   fun() -> String:
     n := n + 1
     n.tostring()
