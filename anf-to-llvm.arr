@@ -47,18 +47,18 @@ data LLVMExpr:
   | llvm-id(id :: String, tmp :: String) with:
     getexpr(self): "%" + self.tmp end,
     getsetup(self): 
-      "%" + self.tmp + " = load %struct.pyret-number* %" + self.id + "\n"
+      "%" + self.tmp + " = load %struct.pyret-number** %" + self.id + "\n"
     end, 
     getinit(self): 
-      " load %struct.pyret-number* %" + self.id + "\n"
+      " load %struct.pyret-number** %" + self.id + "\n"
     end
   | llvm-id-var(id :: String, tmp :: String) with:
     getexpr(self): "%" + self.tmp end,
     getsetup(self): 
-      "%" + self.tmp + " = load %struct.pyret-number* %" + self.id + "\n"
+      "%" + self.tmp + " = load %struct.pyret-number** %" + self.id + "\n"
     end, 
     getinit(self): 
-      " load %struct.pyret-number* %" + self.id + "\n"
+      " load %struct.pyret-number** %" + self.id + "\n"
     end
   | llvm-app(f :: LLVMExpr, args :: List<LLVMExpr>, tmp :: String) with:
     getexpr(self): "%" + self.tmp end,
@@ -98,9 +98,9 @@ data LLVMStmt:
     end
   | llvm-let(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
-      "%" + self.id + " = alloca %struct.pyret-number\n" + self.val.getsetup()
-        + "store %struct.pyret-number " + self.val.getexpr() 
-        + ", %struct.pyret-number* %" + self.id + "\n" + self.body.tostring()
+      "%" + self.id + " = alloca %struct.pyret-number*\n" + self.val.getsetup()
+        + "store %struct.pyret-number* " + self.val.getexpr() 
+        + ", %struct.pyret-number** %" + self.id + "\n" + self.body.tostring()
     end
   | llvm-var(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
