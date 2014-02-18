@@ -3,6 +3,7 @@
 provide *
 import file as F
 import "ast-anf.arr" as N
+import "helpers.arr" as H
 # import "llvm/llvm.arr" as L
 # import "llvm/atomic.arr" as Atomic
 # import "llvm/fcmp.arr" as Fcmp
@@ -129,7 +130,7 @@ data LLVM:
   # TODO this will also need to hold imports as well, eventually. 
   | llvm-prog(body :: LLVMStmt, nums :: Set<Number>) with:
     tostring(self):
-	  var str = ""
+	  var str = H.get-file-text("runtime/num.ll") + "\n"
       #var str = "declare i64 @puts(i8*)\n"
 	  #str := str + "declare i64 @printf(i8*, i64)\n" # Just for now
       # str := str + "declare void @print-pyret-number(%struct.pyret-number*)\n"
