@@ -5,6 +5,8 @@ provide *
 # This file and its contents are based on the types found in the OCaml LLVM
 # bindings. They have been adapted to Pyret for this compiler.
 
+import "kind.arr" as K
+
 data Linkage:
   | External
   | Available_externally
@@ -100,9 +102,9 @@ data Opcode:
   | Or
   | Xor
   # Memory Operators
-  | Alloca
-  | Load
-  | Store
+  | Alloca(typ :: K.TypeKind)
+  | Load(typ :: K.TypeKind, typ :: K.TypeKind<K.is-Pointer>)
+  | Store(value-typ :: K.TypeKind, value :: K.ValueKind, ptr-typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>)
   | GetElementPtr
   # Cast Operators
   | Trunc
