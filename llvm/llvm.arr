@@ -104,9 +104,14 @@ data Opcode:
   | Or
   | Xor
   # Memory Operators
-  | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>)
-  | Store(value-typ :: K.TypeKind, value :: K.ValueKind, ptr-typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>)
+  | Alloca(typ :: K.TypeKind) with: 
+    tostring(self): "alloca " + self.typ.tostring() end
+  | Load(typ :: K.TypeKind, ptr :: K.ValueKind) with: 
+    tostring(self): "load " + typ.tostring() + " " + ptr.tostring() end
+  | Store(value-typ :: K.TypeKind, value :: K.ValueKind, ptr-typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>) with: 
+    tostring(self): 
+      # TODO figure stuff out first
+    end
   | GetElementPtr
   # Cast Operators
   | Trunc

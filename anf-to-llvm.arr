@@ -44,7 +44,7 @@ data LLVMExpr:
   | llvm-bool(b :: Bool) with: 
     getexpr(self): "%" + self.tmp end,
     getsetup(self): 
-      "%" + self.tmp " = " self.getinit()
+      "%" + self.tmp + " = " + self.getinit()
     end, 
     getinit(self): 
       # TODO

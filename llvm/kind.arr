@@ -5,20 +5,32 @@ provide *
 import "llvm.arr" as LLVM
 
 data TypeKind:
-  | Void
-  | Half
-  | Float
-  | Double
-  | X86fp80
-  | Fp128
-  | Ppc_fp128
-  | Label
-  | Integer(width :: Number)
-  | FunctionType(ret :: TypeKind, params :: List<TypeKind>)
-  | Struct(fields :: List<TypeKind>)
-  | Arr(len :: Number, type :: TypeKind)
-  | Pointer(type :: TypeKind, addrspace :: Number) # Numbered address space?
-  | Vector(len :: Number, type :: TypeKind)
+  | Void with: 
+    tostring(self): "void" end
+  | Half with: 
+    tostring(self): "half" end
+  | Float with: 
+    tostring(self): "float" end
+  | Double with: 
+    tostring(self): "double" end
+  | X86fp80 with: 
+    tostring(self): "x86_fp80" end
+  | Fp128 with:
+    tostring(self): "fp128" end
+  | Ppc_fp128 with:
+    tostring(self): "ppc_fp128" end
+  | Label with: 
+    tostring(self): "label" end
+  | Integer(width :: Number) with:
+    tostring(self): "i" + self.width.tostring() end
+  | FunctionType(ret :: TypeKind, params :: List<TypeKind>) with:
+    tostring(self): 
+      self.ret.tostring() + " (" + self.params.join-str(", ") + ")"
+    end
+  | Struct(fields :: List<TypeKind>, packed :: Bool)
+  | Arr(len :: Number, typ :: TypeKind)
+  | Pointer(typ :: TypeKind, addrspace :: Number) # Numbered address space?
+  | Vector(len :: Number, typ :: TypeKind)
   | Metadata
   | X86_mmx
 end
