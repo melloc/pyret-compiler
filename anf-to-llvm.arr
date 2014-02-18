@@ -41,7 +41,14 @@ data LLVMExpr:
     end
   | llvm-short-str(s :: String, len :: Number, tmp :: String) # len <= 255
   | llvm-long-str(s :: String, tmp :: String) # len > 255
-  | llvm-bool(b :: Bool) # i.e., an i1
+  | llvm-bool(b :: Bool) with: 
+    getexpr(self): "%" + self.tmp end,
+    getsetup(self): 
+      "%" + self.tmp " = " self.getinit()
+    end, 
+    getinit(self): 
+      # TODO
+    end
   | llvm-undef # TODO how do we represent this? NULL? 
   | llvm-func(params :: List<String>, body :: LLVMStmt)
   | llvm-id(id :: String, tmp :: String) with:
