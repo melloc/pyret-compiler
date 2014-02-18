@@ -15,7 +15,7 @@ next-val = (fun():
   var n = 0
   fun() -> String:
     n := n + 1
-    n.tostring()
+    "id.v" + n.tostring()
   end
 end)()
 
