@@ -1,5 +1,10 @@
-;; This file provides examples of using libgmp in LLVM IR.
+;; This file provides the basic runtime environment for Pyret.
+;; Currently, the only functions provided are those related to doing 
+;; arithmetic in Pyret.
 ;;
+;; When building this file, you should link against libgmp. For example:
+;;
+;; clang -Xlinker /usr/lib64/libgmp.so -o my-prog my-prog.ll
 ;;
 
 target triple = "x86_64-pc-linux-gnu"
@@ -172,37 +177,3 @@ define void @print-pyret-number(%struct.pyret-number* %number) {
     ret void
 }
 
-@num1 = private unnamed_addr constant [17 x i8] c"7612058254738945\00"
-@num2 = private unnamed_addr constant [17 x i8] c"9263591128439081\00"
-
-define i32 @main() {
-    %a = call %struct.pyret-number* @initialize-integer(i8* getelementptr inbounds ([17 x i8]* @num1, i32 0, i32 0))
-    %b = call %struct.pyret-number* @initialize-integer(i8* getelementptr inbounds ([17 x i8]* @num2, i32 0, i32 0))
-
-    ;; Example addition
-    %a-add-b = call %struct.pyret-number* @rational-plus-method(%struct.pyret-number* %a, %struct.pyret-number* %b)
-    %b-add-a = call %struct.pyret-number* @rational-plus-method(%struct.pyret-number* %b, %struct.pyret-number* %a)
-
-    ;; Example subtraction
-    %a-sub-b = call %struct.pyret-number* @rational-minus-method(%struct.pyret-number* %a, %struct.pyret-number* %b)
-    %b-sub-a = call %struct.pyret-number* @rational-minus-method(%struct.pyret-number* %b, %struct.pyret-number* %a)
-
-    ;; Example multiplication
-    %a-times-b = call %struct.pyret-number* @rational-times-method(%struct.pyret-number* %a, %struct.pyret-number* %b)
-    %b-times-a = call %struct.pyret-number* @rational-times-method(%struct.pyret-number* %b, %struct.pyret-number* %a)
-
-    ;; Example division
-    %a-over-b = call %struct.pyret-number* @rational-divide-method(%struct.pyret-number* %a, %struct.pyret-number* %b)
-    %b-over-a = call %struct.pyret-number* @rational-divide-method(%struct.pyret-number* %b, %struct.pyret-number* %a)
-
-    call void @print-pyret-number(%struct.pyret-number* %a-add-b)
-    call void @print-pyret-number(%struct.pyret-number* %b-add-a)
-    call void @print-pyret-number(%struct.pyret-number* %a-sub-b)
-    call void @print-pyret-number(%struct.pyret-number* %b-sub-a)
-    call void @print-pyret-number(%struct.pyret-number* %a-times-b)
-    call void @print-pyret-number(%struct.pyret-number* %b-times-a)
-    call void @print-pyret-number(%struct.pyret-number* %a-over-b)
-    call void @print-pyret-number(%struct.pyret-number* %b-over-a)
-
-    ret i32 0
-}
