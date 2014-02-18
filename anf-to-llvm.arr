@@ -8,7 +8,6 @@ import "llvm/atomic.arr" as Atomic
 import "llvm/fcmp.arr" as Fcmp
 import "llvm/icmp.arr" as Icmp
 import "llvm/kind.arr" as Kind
->>>>>>> Stashed changes
 # Functions, calls, numbers, methods, variables, assigns, stdout
 
 
