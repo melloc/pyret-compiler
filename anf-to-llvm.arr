@@ -127,7 +127,7 @@ data LLVM:
 	  var str = ""
       #var str = "declare i64 @puts(i8*)\n"
 	  #str := str + "declare i64 @printf(i8*, i64)\n" # Just for now
-      str := str + "declare void @print-pyret-number(%struct.pyret-number*)\n"
+      # str := str + "declare void @print-pyret-number(%struct.pyret-number*)\n"
 
       # TODO declare the numbers that we will need
       # TODO they will be stored as variables called @num.v{num}
