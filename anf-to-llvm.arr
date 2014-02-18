@@ -26,7 +26,7 @@ data LLVMExpr:
     getsetup(self):
       # TODO set up object. Final value (pointer?) should be stored in %tmp
       # Output needs to end in the newline.
-	  "%" + self.tmp + " = " + self.n.tostring() # TODO this is temporary. 
+	  "%" + self.tmp + " = " + self.n.tostring() + "\n" # TODO temporary. 
     end
   | llvm-short-str(s :: String, len :: Number, tmp :: String) # len <= 255
   | llvm-long-str(s :: String, tmp :: String) # len > 255
@@ -35,7 +35,7 @@ data LLVMExpr:
   | llvm-func(params :: List<String>, body :: LLVMStmt)
   | llvm-id(id :: String) with:
     getexpr(self): "%" + self.id end,
-    getsetup(self): "" end
+    getsetup(self): "\n" end
   | llvm-id-var(id :: String, tmp :: String) with:
     getexpr(self): "%" + self.tmp end,
     getsetup(self): 
@@ -45,7 +45,7 @@ data LLVMExpr:
     getexpr(self): 
       # TODO
     end,
-    getsetup(self): "" end
+    getsetup(self): "\n" end
 end
 
 # The tostring() methods here will not work in the long run. However, for the
@@ -66,7 +66,7 @@ data LLVMStmt:
     end
   | llvm-assign(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
-      # TODO store pointer in memory
+      # TODO
     end
 end
 
@@ -82,7 +82,7 @@ data LLVM:
 	  # TODO We could also just put them in a library, but they will need to
 	  # TODO be declared somewhere for this to all work. 
 
-	  str := str + "define i64 @main() {"
+	  str := str + "define i64 @main() {\n"
 	  str := str + self.body.tostring()
       str + "}"
     end
@@ -96,7 +96,7 @@ fun aprog-llvm(prog :: N.AProg) -> LLVM:
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => 
         # TODO handle compiling headers
-        aexpr-llvm(body)
+        llvm-prog(aexpr-llvm(body))
   end
 end
 

@@ -21,11 +21,11 @@ a = A.parse(str, infile, {check : false}) # TODO do we want check?
 # convert AST to ANF using Joe's code
 prog = J.anf-program(a.post-desugar) # TODO or do we want pre-desugar?
 
-print(prog)
+#print(prog)
 
 # convert ANF to LLVM using our code
-#ll = L.aprog-llvm(prog)
+ll = L.aprog-llvm(prog)
 
 # TODO convert that ANF to a string and write it to output file
-#F.output-file(outfile, false).display(ll.tostring())
+F.output-file(outfile, false).display(ll.tostring())
 # TODO Explicitly close the file, maybe? It would be a good idea. 
