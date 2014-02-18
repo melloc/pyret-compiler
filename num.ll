@@ -145,7 +145,7 @@ define %struct.pyret-number* @rational-times-method(%struct.pyret-number* %a, %s
     ret %struct.pyret-number* %result
 }
 
-@math.rational-print-string = private unnamed_addr constant [5 x i8] c"%Zd\0A\00"
+@math.rational-print-string = private unnamed_addr constant [5 x i8] c"%Qd\0A\00"
 
 define void @print-pyret-number(%struct.pyret-number* %number) {
     ;; Get the field

@@ -86,6 +86,10 @@ fun anf-block(es-init :: List<A.Expr>, k :: (N.ALettable -> N.AExpr)):
           anf(f, k)
         else:
           cases(A.Expr) f:
+            | s_var(l, b, val) =>
+                anf(val, fun(lettable):
+                  N.a-var(f.l, bind(b.l, b.id), lettable, anf-block-help(r))
+                end)
             | s_let(l, b, val) =>
                 anf(val, fun(lettable):
                   N.a-let(f.l, bind(b.l, b.id), lettable, anf-block-help(r))
