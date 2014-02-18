@@ -86,12 +86,9 @@ fun anf-block(es-init :: List<A.Expr>, k :: (N.ALettable -> N.AExpr)):
           anf(f, k)
         else:
           cases(A.Expr) f:
-            | s_let(l, b, val) => 
+            | s_let(l, b, val) =>
                 anf(val, fun(lettable):
-                  N.a-let(f.l, 
-                          bind(b.l, b.id), 
-                          lettable, 
-                          anf-block-help(r))
+                  N.a-let(f.l, bind(b.l, b.id), lettable, anf-block-help(r))
                 end)
             | else => anf(f, fun(lettable):
                   t = mk-id(f.l, "anf_begin_dropped")

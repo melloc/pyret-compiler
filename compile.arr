@@ -17,6 +17,12 @@ fun get-file-text(filename :: String) -> String:
     prog-txt
 end
 
+fun put-file-text(filename :: String, text :: String):
+    f = F.output-file(filename, false)
+    f.display(text)
+    f.close-file()
+end
+
 fun main(argc :: Number, argv :: List<String>) -> Number:
     if argc <> 2:
         print("Usage: compile <input.arr> <output.ll>")
@@ -28,6 +34,7 @@ fun main(argc :: Number, argv :: List<String>) -> Number:
         parsed = A.parse(prog-txt, input-filename, { check : false, env : N.pyret-env })
         anfed = anf.anf-program(parsed.pre-desugar)
         ir  = llvm.aprog-llvm(anfed)
+        put-file-text(output-filename, ir.tostring())
         0
     end
 end
