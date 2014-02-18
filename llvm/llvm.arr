@@ -103,7 +103,7 @@ data Opcode:
   | Xor
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, typ :: K.TypeKind<K.is-Pointer>)
+  | Load(typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>)
   | Store(value-typ :: K.TypeKind, value :: K.ValueKind, ptr-typ :: K.TypeKind, ptr :: K.TypeKind<K.is-Pointer>)
   | GetElementPtr
   # Cast Operators
