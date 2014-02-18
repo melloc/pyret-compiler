@@ -101,6 +101,20 @@ fun anf-block(es-init :: List<A.Expr>, k :: (N.ALettable -> N.AExpr)):
   anf-block-help(es-init)
 end
 
+fun convert-math-method(name :: String) -> String: 
+  if name == "op+":
+    "rational-plus-method"
+  else if name == "op-":
+    "rational-minus-method"
+  else if name == "op*":
+    "rational-times-method"
+  else if name == "op/":
+    "rational-divide-method"
+  else:
+    raise("Unsupported operation!")
+  end
+end
+
 fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
   cases(A.Expr) e:
     | s_num(l, n) => k(N.a-val(N.a-num(l, n)))
@@ -215,6 +229,14 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
     | s_app(l, f, args) =>
       anf-name(f, "anf_fun", fun(v):
           anf-name-rec(args, "anf_arg", fun(vs):
+              k(N.a-app(l, v, vs))
+            end)
+        end)
+
+    # TODO just hack to get us through the first stage
+    | s_op(l, op, left, right) => 
+      anf-name(A.s_id(l, convert-math-method(op)), "anf_fun", fun(v): 
+          anf-name-rec([left, right], "anf_arg", fun(vs):
               k(N.a-app(l, v, vs))
             end)
         end)

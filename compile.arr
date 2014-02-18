@@ -17,9 +17,9 @@ fun get-file-text(filename :: String) -> String:
     prog-txt
 end
 
-fun put-file-text(filename :: String, text :: String):
+fun put-file-text(filename :: String, txt :: String):
     f = F.output-file(filename, false)
-    f.display(text)
+    f.display(txt)
     f.close-file()
 end
 
