@@ -6,4 +6,17 @@ Thus, we will need to add a subscript to every variable, so that we have
 things like x1, x2, x3, etc. This is something to think about a bit more.
 
 We'll probably also need to pass an environment of some sort, to handle
-closures. However, this may not be necessary right now. 
+closures. However, this may not be necessary right now.
+
+
+With regards to the difference between "let" and "var": right now, we aren't 
+distinguishing between the two of them in our LLVM representation. I see two
+possible paths that we could follow here:
+
+ - First of all, we could simply say that there is no distinction between let
+   and var in the core language, and that let-bound variables are simply not
+   mutable due to the type system. That is probably the best option for speedy
+   development, since we don't have to do a lot of optimization. 
+
+ - On the other hand, it might be nice to do as much substitution as possible
+   before we generate code, in which case we should keep them separate. 

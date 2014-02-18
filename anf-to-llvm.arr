@@ -111,11 +111,16 @@ data LLVMStmt:
     end
   | llvm-var(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
-      # TODO allocate memory; store pointer in %id; store val there
+      type = "%struct.pyret-number*"
+      "%" + self.id + " = alloca " + type + "\n" + self.val.getsetup()
+        + "store " + type + " " + self.val.getexpr()
+        + ", " + type + "* %" + self.id + "\n" + self.body.tostring()
     end
   | llvm-assign(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
-      # TODO
+      type = "%struct.pyret-number*"
+      self.val.getsetup() + "store " + type + " " + self.val.getexpr()
+       + ", " + type + "* %" + self.id + "\n" + self.body.tostring()
     end
 end
 
@@ -205,9 +210,9 @@ fun aexpr-llvm(expr :: N.AExpr) -> LLVMStmt:
           llvm-let(tmp, 
                    aval-llvm(e.value), 
                    llvm-assign(e.id, 
-                               llvm-id(tmp), 
+                               llvm-id(tmp, next-val()), 
                                llvm-let(bind.id, 
-							            llvm-id(tmp), 
+							            llvm-id(tmp, next-val()), 
 										aexpr-llvm(body))))
         else:
           llvm-let(bind.id, alettable-llvm(e), aexpr-llvm(body))
@@ -218,9 +223,9 @@ fun aexpr-llvm(expr :: N.AExpr) -> LLVMStmt:
           llvm-let(tmp, 
                    aval-llvm(e.value), 
                    llvm-assign(e.id, 
-                               llvm-id(tmp), 
+                               llvm-id(tmp, next-val()), 
                                llvm-var(bind.id, 
-							            llvm-id(tmp), 
+							            llvm-id(tmp, next-val()), 
 										aexpr-llvm(body))))
         else:
           llvm-var(bind.id, alettable-llvm(e), aexpr-llvm(body))

@@ -6,6 +6,8 @@ provide *
 # bindings. They have been adapted to Pyret for this compiler.
 
 import "kind.arr" as K
+import "icmp.arr" as I
+import "fcmp.arr" as F
 
 data Linkage:
   | External
@@ -120,8 +122,8 @@ data Opcode:
   | IntToPtr
   | BitCast
   # Other Operators
-  | ICmp
-  | FCmp
+  | ICmp(cond :: I.Icmp, type :: K.TypeKind, op1 :: K.ValueKind, op2 :: K.ValueKind)
+  | FCmp(cond :: F.Fcmp, type :: K.TypeKind, op1 :: K.ValueKind, op2 :: K.ValueKind)
   | PHI
   | Call
   | Select

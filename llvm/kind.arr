@@ -13,12 +13,12 @@ data TypeKind:
   | Fp128
   | Ppc_fp128
   | Label
-  | Integer
-  | FunctionType
-  | Struct
-  | Arr
-  | Pointer
-  | Vector
+  | Integer(width :: Number)
+  | FunctionType(ret :: TypeKind, params :: List<TypeKind>)
+  | Struct(fields :: List<TypeKind>)
+  | Arr(len :: Number, type :: TypeKind)
+  | Pointer(type :: TypeKind, addrspace :: Number) # Numbered address space?
+  | Vector(len :: Number, type :: TypeKind)
   | Metadata
   | X86_mmx
 end
