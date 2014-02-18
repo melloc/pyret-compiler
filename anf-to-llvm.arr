@@ -31,11 +31,11 @@ end
 data LLVMStmt:
   | llvm-ret(val :: LLVMExpr) with: 
     tostring(self):
-      "ret " + val.tostring() + "\n"
+      "ret " + self.val.tostring() + "\n"
     end
   | llvm-let(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
-      "%" + id + " = " + val.tostring() + "\n" + body.tostring()
+      "%" + self.id + " = " + self.val.tostring() + "\n" + self.body.tostring()
     end
   | llvm-var(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
