@@ -36,9 +36,10 @@ data LLVMExpr:
       "%" + self.tmp + " = " + self.getinit()
     end, 
     getinit(self): 
+      str-n = self.n.tostring-fixed(10)
       "call %struct.pyret-number* @initialize-integer(i8* getelementptr "
-        + "inbounds ([" + (self.n.tostring().length() + 1).tostring() 
-        + " x i8]* " + num-prefix + self.n.tostring() + ", i32 0, i32 0))\n"
+        + "inbounds ([" + (str-n.length() + 1).tostring() 
+        + " x i8]* " + num-prefix + str-n + ", i32 0, i32 0))\n"
     end
   | llvm-short-str(s :: String, len :: Number, tmp :: String) # len <= 255
   | llvm-long-str(s :: String, tmp :: String) # len > 255
@@ -135,9 +136,10 @@ data LLVM:
       # TODO declare the numbers that we will need
       # TODO they will be stored as variables called @num.v{num}
       str := for fold(s from str, n from self.nums.to-list()):
-        s + num-prefix + n.tostring() + " = private unnamed_addr constant ["
-          + (n.tostring().length() + 1).tostring() + " x i8] c\"" 
-          + n.tostring() + "\\00\"\n"
+        str-n = n.tostring-fixed(10)
+        s + num-prefix + str-n + " = private unnamed_addr constant ["
+          + (str-n.length() + 1).tostring() + " x i8] c\"" 
+          + str-n + "\\00\"\n"
       end
 
 	  # TODO in here, declare all built-in functions that will be necessary.
