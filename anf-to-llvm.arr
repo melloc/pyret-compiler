@@ -20,7 +20,16 @@ next-val = (fun():
   end
 end)()
 
+next-scope = (fun():
+  var n = 0
+  fun() -> String:
+    n := n + 1
+    "s" + n.tostring() + "."
+  end
+end)()
+
 num-prefix = "@num.v"
+num-id-prefix = "%num.p"
 
 
 # Data definition for LLVM constructs
@@ -29,16 +38,12 @@ num-prefix = "@num.v"
 # values for tmp; instead, use the "next-val" function. 
 data LLVMExpr:
   | llvm-num(n :: Number, tmp :: String) with: 
-    getexpr(self): "%" + self.tmp end,
+    getexpr(self): num-id-prefix + self.n.tostring() end,
     getsetup(self):
-      # TODO set up object. Final value (pointer?) should be stored in %tmp
-      # Output needs to end in the newline.
-      "%" + self.tmp + " = " + self.getinit()
+      ""
     end, 
     getinit(self): 
-      "call %struct.pyret-number* @initialize-integer(i8* getelementptr "
-        + "inbounds ([" + (self.n.tostring().length() + 1).tostring() 
-        + " x i8]* " + num-prefix + self.n.tostring() + ", i32 0, i32 0))\n"
+      ""
     end
   | llvm-short-str(s :: String, len :: Number, tmp :: String) # len <= 255
   | llvm-long-str(s :: String, tmp :: String) # len > 255
@@ -117,12 +122,14 @@ data LLVMStmt:
         + "store " + type + " " + self.val.getexpr()
         + ", " + type + "* %" + self.id + "\n" + self.body.tostring()
     end
+    # TODO turn "var" into let v (new box) (set-box v value (...))
   | llvm-assign(id :: String, val :: LLVMExpr, body :: LLVMStmt) with:
     tostring(self):
       type = "%struct.pyret-number*"
       self.val.getsetup() + "store " + type + " " + self.val.getexpr()
        + ", " + type + "* %" + self.id + "\n" + self.body.tostring()
     end
+    # TODO turn "assign" into set-box v value (...)
 end
 
 # This is the top-level LLVM type. 
@@ -138,17 +145,115 @@ data LLVM:
         s + num-prefix + n.tostring() + " = private unnamed_addr constant ["
           + (n.tostring().length() + 1).tostring() + " x i8] c\"" 
           + n.tostring() + "\\00\"\n"
-      end
-
-	  # TODO in here, declare all built-in functions that will be necessary.
-	  # TODO We could also just put them in a library, but they will need to
-	  # TODO be declared somewhere for this to all work. 
+      end 
 
 	  str := str + "define i64 @main() {\n"
+
+      str := for fold(s from str, n from self.nums.to-list()):
+        s + num-id-prefix + n.tostring() + " = "
+          + "call %struct.pyret-number* @initialize-integer(i8* getelementptr "
+          + "inbounds ([" + (n.tostring().length() + 1).tostring() 
+          + " x i8]* " + num-prefix + n.tostring() + ", i32 0, i32 0))\n"
+      end
+
 	  str := str + self.body.tostring()
       str := str + "ret i64 0\n" # Remove later on
       str + "}"
     end
+end
+
+# TODO TODO TODO
+# TODO TODO TODO Figure out the scoping problem. 
+# TODO TODO TODO 
+
+# Substitution
+data Subst:
+  | let-sub(id :: String, val :: LLVMExpr)
+end
+
+# Alle nutzlose Variabeln wegwerfen
+# this will be a bad idea if it leads to many more initializations. 
+# We should try and only initialize each literal number (and literal string)
+# once, which will probably mean creating global identifiers for each one
+# and initializing them at the beginning of the main function. 
+# To do this, we will need to, in addition to the strings that store the 
+# actual values of the numbers, also create global variables which contain
+# pointers to the newly-created objects (we'll have to initialize them first
+# thing when the program runs).
+# Actually, we don't even need globals, since there's no such thing as scope
+# in LLVM. Just create locals at the beginning of the run.
+# Ultimately, we will be able to switch to an internal representation that
+# doesn't even contain literals for "primatives" at all --- only identifiers.
+fun filter-lets(prog :: LLVMStmt) -> LLVMStmt:
+  fun lookup-in-subst(s :: String, 
+                      subs :: List<Subst>, 
+                      alt :: LLVMExpr) -> LLVMExpr:
+    cases (List<Subst>) subs: 
+      | link(f, r) => if f.id == s: f.val else: lookup-in-subst(s, r) end
+      | empty => alt
+    end
+  end
+
+  fun eval-const(expr :: LLVMExpr) -> Option<LLVMExpr>:
+    cases (LLVMExpr) expr:
+      | llvm-func(_, _) => none
+      | llvm-id-var(_, _) => none
+      | llvm-app(_, _, _) => none
+      | else => some(expr)
+    end
+  end
+
+  fun filter-lets-expr(expr :: LLVMExpr, subs :: List<Subst>) -> LLVMExpr:
+    cases (LLVMExpr) expr: 
+      | llvm-func(params, body) => 
+          # This will get more complicated when we bring environments into the
+          # picture. We will need to store the variables in our substitution
+          # here, since they will be in this function's closure. 
+          llvm-func(params, filter-lets-stmt(body, subs))
+      | llvm-id(id, tmp) => lookup-in-subst(id, subs, expr)
+      | llvm-app(f, args, tmp) => 
+          llvm-app(filter-lets-expr(f, subs), 
+                   for map(a from args): filter-lets-expr(a, subs) end,
+                   tmp)
+      | else => expr
+    end
+  end
+
+  fun filter-lets-stmt(stmt :: LLVMStmt, subs :: List<Subst>) -> LLVMStmt:
+    cases (LLVMStmt) stmt: 
+      | llvm-ret(val) => llvm-ret(filter-lets-expr(val, subs))
+      | llvm-let(id, val, body) => 
+          cases (Option<LLVMExpr>) eval-const(filter-lets-expr(val, subs)):
+            | none => llvm-let(id, val, filter-lets-stmt(body, subs))
+            | some(c) => 
+                newsubs = for map(s from subs): 
+                            if is-llvm-id(s.val) and (s.val.id == id):
+                              let-sub(s.id, c)
+                            else:
+                              s
+                            end
+                          end
+                filter-lets-stmt(body, [let-sub(id, c)] + newsubs)
+          end
+      | llvm-var(id, val, body) => 
+          llvm-var(id, 
+                   filter-lets-expr(val, subs), 
+                   filter-lets-stmt(body, subs))
+      | llvm-assign(id, val, body) => 
+          llvm-assign(id,
+                      filter-lets-expr(val, subs),
+                      filter-lets-stmt(body, subs))
+    end
+  end
+
+  filter-lets-stmt(prog, empty)
+where:
+  filter-lets(llvm-ret(llvm-num(1, "tmp"))) is llvm-ret(llvm-num(1, "tmp"))
+  filter-lets(
+      llvm-let("x", 
+               llvm-num(0, "tmp"), 
+               llvm-ret(llvm-id("x", "tmp")))
+    ) is llvm-ret(llvm-num(0, "tmp"))
 end
 
 # Helper for lift-nums
@@ -182,7 +287,9 @@ fun lift-nums(stmt :: LLVMStmt) -> Set<Number>:
   end
 where:
   lift-nums(llvm-ret(llvm-num(3, "sdf"))) is set([3])
-  lift-nums(llvm-let("v", llvm-num(4, "sdf"), llvm-ret(llvm-id("v")))) is set([4])
+  lift-nums(llvm-let("v", 
+                     llvm-num(4, "sdf"), 
+                     llvm-ret(llvm-id("v", "sdf")))) is set([4])
 end
 
 # This is the top-level function that will be called on ANF'ed code. It takes

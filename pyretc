@@ -1,0 +1,12 @@
+#! /bin/bash
+
+# TODO this might need to be more general than a bash script, but for now 
+# that's good enough for our purposes. 
+
+infile=$1
+outfile=$2
+lltmp="/tmp/pyretc_`basename $infile`_`basename $outfile`_${RANDOM}.ll"
+
+raco pyret compile.arr $infile $lltmp > /dev/null
+clang -Xlinker /usr/lib64/libgmp.so -o $outfile $lltmp
+rm $lltmp

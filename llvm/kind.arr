@@ -27,12 +27,30 @@ data TypeKind:
     tostring(self): 
       self.ret.tostring() + " (" + self.params.join-str(", ") + ")"
     end
-  | Struct(fields :: List<TypeKind>, packed :: Bool)
-  | Arr(len :: Number, typ :: TypeKind)
-  | Pointer(typ :: TypeKind, addrspace :: Number) # Numbered address space?
-  | Vector(len :: Number, typ :: TypeKind)
-  | Metadata
-  | X86_mmx
+  | Struct(fields :: List<TypeKind>, packed :: Bool) with:
+    tostring(self):
+      inside = self.fields.join-str(", ")
+      if packed: "<" + inside + ">" else: inside end
+    end
+  | Arr(len :: Number, typ :: TypeKind) with:
+    tostring(self): 
+      "[" + self.len.tostring() + " x " + self.typ.tostring() "]"
+    end
+  | Pointer(typ :: TypeKind, addrspace :: Option<Number>) with:
+    tostring(self): 
+      cases (Option<Number>) self.addrspace:
+        | some(n) => self.typ.tostring() + " addrspace(" + n.tostring() + ")*"
+        | none => self.typ.tostring() + "*"  
+      end
+    end
+  | Vector(len :: Number, typ :: TypeKind) with:
+    tostring(self): 
+      "<" + self.len.tostring() + " x " + self.typ.tostring() + ">"
+    end
+  | Metadata with:
+    tostring(self): "metadata" end
+  | X86_mmx with: 
+    tostring(self): "x86mmx" end
 end
 
 data ValueKind:
