@@ -293,6 +293,7 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
             end)
         end)
 
+    | s_paren(_, expr) => anf(expr, k)
     | s_let(_, _, _) => raise("s_let should be handled by anf-block: " + torepr(e))
     | s_var(_, _, _) => raise("s_var should be handled by anf-block: " + torepr(e))
     | else => raise("Missed case in anf: " + torepr(e))

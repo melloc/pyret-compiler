@@ -38,12 +38,16 @@ num-id-prefix = "%num.p"
 # values for tmp; instead, use the "next-val" function. 
 data LLVMExpr:
   | llvm-num(n :: Number, tmp :: String) with: 
-    getexpr(self): num-id-prefix + self.n.tostring() end,
+    getexpr(self): num-id-prefix + self.n.tostring-fixed(10) end,
     getsetup(self):
       ""
     end, 
     getinit(self): 
       ""
+  #    str-n = self.n.tostring-fixed(10)
+  #    "call %struct.pyret-number* @initialize-integer(i8* getelementptr "
+  #      + "inbounds ([" + (str-n.length() + 1).tostring() 
+  #      + " x i8]* " + num-prefix + str-n + ", i32 0, i32 0))\n"
     end
   | llvm-short-str(s :: String, len :: Number, tmp :: String) # len <= 255
   | llvm-long-str(s :: String, tmp :: String) # len > 255
@@ -142,18 +146,20 @@ data LLVM:
       # TODO declare the numbers that we will need
       # TODO they will be stored as variables called @num.v{num}
       str := for fold(s from str, n from self.nums.to-list()):
-        s + num-prefix + n.tostring() + " = private unnamed_addr constant ["
-          + (n.tostring().length() + 1).tostring() + " x i8] c\"" 
-          + n.tostring() + "\\00\"\n"
-      end 
+        str-n = n.tostring-fixed(10)
+        s + num-prefix + str-n + " = private unnamed_addr constant ["
+          + (str-n.length() + 1).tostring() + " x i8] c\"" 
+          + str-n + "\\00\"\n"
+      end
 
 	  str := str + "define i64 @main() {\n"
 
       str := for fold(s from str, n from self.nums.to-list()):
-        s + num-id-prefix + n.tostring() + " = "
+        str-n = n.tostring-fixed(10)
+        s + num-id-prefix + str-n + " = "
           + "call %struct.pyret-number* @initialize-integer(i8* getelementptr "
-          + "inbounds ([" + (n.tostring().length() + 1).tostring() 
-          + " x i8]* " + num-prefix + n.tostring() + ", i32 0, i32 0))\n"
+          + "inbounds ([" + (str-n.length() + 1).tostring() 
+          + " x i8]* " + num-prefix + str-n + ", i32 0, i32 0))\n"
       end
 
 	  str := str + self.body.tostring()
