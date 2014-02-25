@@ -1,12 +1,21 @@
 Things to do for compiler: 
 
-kechpaja: 
- - Initial Pyret code to compile functions, calls, number, methods, variables, 
-   assigns, writing to stdout.
+ANF Passes:
+    - Filter lets
+    - Lift data type declarations to top
+    - Lift numbers, strings, booleans
+    - Lift/rewrite functions, rewrite function calls
+        - All functions are declared at top
+        - Detect free variables
+        - Add argument to function call that takes record
 
+ANF->Intermediate:
+    - Introduce/instantiate closures
+    - Rewrite cases to select appropriate parts of object memory/do binding
+    - Rewrite data type constructors to be lower level
+    - Add/create vtable information
 
-melloc: 
- - How to instantiate libgmp numbers (rationals), call libgmp functions, 
-   dynamically link against libgmp when compiling LLVM IR. 
+Intermediate Passes:
+    - Rewrite tests in pattern matching
 
-
+- We need to finish flushing out LLVM representation
