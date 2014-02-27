@@ -9,6 +9,8 @@ ANF Passes:
         - Detect free variables
         - Add argument to function call that takes record
 
+    - Update variable names to reflect lack of scope in LLVM
+
 ANF->Intermediate:
     - Introduce/instantiate closures
     - Rewrite cases to select appropriate parts of object memory/do binding
