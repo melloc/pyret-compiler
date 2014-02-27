@@ -31,6 +31,9 @@ end)()
 num-prefix = "@num.v"
 
 num-id-prefix = "%num.p"
+string-id-prefix = "%str.p"
+bool-id-true = "%bool.p-true"
+bool-id-false = "%bool.p-false"
 
 
 # Data definition for H constructs
@@ -363,19 +366,134 @@ fun lift-bools(prog :: HStmt) -> Set<Bool>:
 end
 
 
+# This function replaces all number, string, and boolean literals with the
+# corresponding identifiers. It, like all of the other functions, will need
+# to be expanded once I create the remaining variants. 
+fun replace-literals(prog :: HStmt) -> HStmt:
+  fun replace-literals-expr(expr :: HExpr) -> HExpr: 
+    cases (HExpr) expr: 
+      | h-num(n) => h-id(num-id-prefix + n.tostring-fixed(tsf-val))
+      # TODO this might not be the best way to handle strings. 
+      # I need to look more into what a legal identifier in LLVM is. 
+      | h-str(s) => h-id(string-id-prefix + "\"" + s + "\"")
+      | h-bool(b) => h-id(if b: bool-id-true else: bool-id-false end)
+      | h-func(params, body) => 
+      | h-app(f, args) => 
+      | else => expr
+    end
+  end
+
+  fun replace-literals-stmt(stmt :: HStmt) -> HStmt:
+    cases (HStmt) stmt: 
+      | h-ret(val) => h-ret(replace-literals-expr(val))
+      | h-let(id, val, body) => 
+          h-let(id, replace-literals-expr(val), replace-literals-stmt(body))
+      | h-var(id, val, body) => 
+          h-var(id, replace-literals-expr(val), replace-literals-stmt(body))
+      | h-assign(id, val, body) => 
+          h-assign(id, replace-literals-expr(val), replace-literals-stmt(body))
+    end
+  end
+
+  replace-literals-stmt(prog)
+
+  # TODO tests!
+end
+
+
+# Internal data type for representing data expressions
+data HData:
+  | h-data(name :: String, variants :: List<HVariant>, shared :: List<HField>)
+end
+
+# and other types necessary for data expressions: 
+data HVariant: 
+  | h-variant(name :: String, 
+              members :: List<HVariantMember>, 
+              with-members :: List<HField>)
+  | h-singleton-variant(name :: String, 
+                        with-members :: List<HField>)
+  # TODO why do we need two variants here? Why not just have the list
+  # empty to represent the second type? 
+end
+
+data HVariantMember:
+  | h-variant-member(member-type :: HMemberType, bind :: HBind)
+end
+
+data HMemberType: 
+  | h-normal
+  | h-cyclic
+  | h-mutable
+end
+
+data HField:
+  h-field(name :: String, value :: HExpr)
+end
+
+data HBind:
+  | h-bind(id :: String, ann :: A.Ann) # TODO do we need out own ann type?
+end
+
+
+# This function lifts data declarations out of Joe's ANF, and returns a set
+# of them. 
+fun lift-datas(prog :: N.AProg) -> Set<HData>: 
+  fun lift-datas-expr(expr :: N.AExpr) -> Set<HData>:
+    | a-let(l, bind, e, body) => 
+        lift-datas-lettable(e).union(lift-datas-expr(body))
+    | a-var(l, bind, e, body) => 
+        lift-datas-lettable(e).union(lift-datas-expr(body))
+    | a-try(l, body, b, _except) => 
+        lift-datas-expr(body).union(lift-datas-expr(_except))
+    | a-split-app(l, is-var, f, args) => set([])
+    | a-if(l, c, t, e) => lift-datas-expr(t).union(lift-datas-expr(e))
+    | a-lettable(e) => lift-datas-lettable(e)
+  end
+
+  fun lift-datas-lettable(ltbl :: ALettable) -> Set<HData>: 
+    | a-data-expr(l, name, variants, shared) => 
+        set([h-data(name, 
+                    for map(v from variants): avariant-h(v) end, 
+                    for map(s from shared): afield-h(s) end)])
+    | a-lam(l, args, body) => lift-datas-expr(body) # right? 
+    | a-method(l, args, body) => lift-datas-expr(body) 
+    | else => set([])
+  end
+
+  datas = lift-datas-expr(prog.body)
+
+  # TODO handle anything that might happen in the headers? 
+
+  datas
+end 
+
+
+
 # This is the top-level function that will be called on ANF'ed code. It takes
-# as argument an AProg, and returns an HProg. 
+# as argument an AProg, and returns an HProg.
+# We might want to consider doing some of the things that we do in here 
+# (such as lifting everything) in some other function. However, that is a 
+# decision that can be made later, since it will require moving only a few 
+# lines of code. 
 fun aprog-h(prog :: N.AProg) -> HProg:  
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => 
+        # TODO we also need to lift data declarations
+        datas = lift-datas(body)
+
         # TODO handle compiling headers
-        hexpr = aexpr-h(body)
-        nums = lift-nums(llexpr)
+        hexpr = aexpr-h(remove-datas(body))
+        nums = lift-nums(hexpr)
+        strings = lift-strings(hexpr)
+        bools = lift-bools(hexpr)
+        rexpr = replace-literals(hexpr)
 
         # TODO be sure to call all transformational functions
 
         # TODO also be sure to handle all headers
-        h-prog(hexpr, nums)
+        h-prog(rexpr, nums)
+        # TODO h-prog(hexpr, nums, strings, bools, funcs, datas, headers)
   end
 end
 
@@ -432,7 +550,7 @@ end
 fun alettable-h(lettable :: N.ALettable) -> HExpr:
   cases (N.ALettable) lettable:
     | a-data-expr(l, name, variants, shared) => 
-        raise("No data expressions just yet")
+        raise("ERROR - a-data-exprs should have been handled already.")
     | a-assign(l, id, value) => 
         raise("ERROR - a-assigns should have been handled already.")
     | a-app(l, _fun, args) => 
