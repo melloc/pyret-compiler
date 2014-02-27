@@ -418,13 +418,7 @@ data HVariant:
 end
 
 data HVariantMember:
-  | h-variant-member(member-type :: HMemberType, bind :: HBind)
-end
-
-data HMemberType: 
-  | h-normal
-  | h-cyclic
-  | h-mutable
+  | h-variant-member(member-type :: AMemberType, bind :: HBind)
 end
 
 data HField:
@@ -467,6 +461,31 @@ fun lift-datas(prog :: N.AProg) -> Set<HData>:
 
   datas
 end 
+
+
+# Convert Variant
+fun avariant-h(variant :: N.AVariant) -> HVariant:
+  cases (N.AVariant) variant: 
+    | a-variant(l, name, members, with-members) => 
+        h-variant(name, 
+                  for map(m from members): avariantmember-h(m) end,
+                  for map(w from with-members): afield-h(w) end)
+    | a-singleton-variant(l, name, with-members) => 
+        h-singleton-variant(name, 
+                            for map(w from with-members): afield-h(w) end)
+  end
+end
+
+# Convert Variant Member
+fun avariantmember-h(member :: AVariantMember) -> HVariantMember:
+  h-variant-member(member.member-type, 
+                   h-bind(member.bind.id, member.bind.ann))
+end
+
+# Convert Field
+fun afield-h(field :: N.AField) -> HField:
+  h-field(field.name, field.value)
+end
 
 
 
