@@ -10,6 +10,8 @@ ANF Passes:
         - Add argument to function call that takes record
 
     - Update variable names to reflect lack of scope in LLVM
+    - I think detecting free variables should come after scoping mods,
+      since the variables will have different names then. 
 
 ANF->Intermediate:
     - Introduce/instantiate closures

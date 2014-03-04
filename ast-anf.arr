@@ -219,10 +219,11 @@ data ALettable:
   | a-get-bang(l :: Loc, obj :: AVal, field :: String) with:
     label(self): "a-get-bang" end,
     tosource(self): PP.infix(INDENT, 0, str-bang, self.obj.tosource(), PP.str(self.field)) end
-  | a-lam(l :: Loc, args :: List<ABind>, body :: AExpr) with:
+    # TODO I (kechpaja) added "ret" so that we can type-check the return value
+  | a-lam(l :: Loc, args :: List<ABind>, ret :: A.Ann, body :: AExpr) with:
     label(self): "a-lam" end,
     tosource(self): fun-method-pretty(PP.str("lam"), self.args, self.body) end
-  | a-method(l :: Loc, args :: List<ABind>, body :: AExpr) with:
+  | a-method(l :: Loc, args :: List<ABind>, ret :: A.Ann, body :: AExpr) with:
     label(self): "a-method" end,
     tosource(self): fun-method-pretty(PP.str("method"), self.args, self.body) end
   | a-val(v :: AVal) with:
