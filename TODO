@@ -23,3 +23,8 @@ Intermediate Passes:
     - Rewrite tests in pattern matching
 
 - We need to finish flushing out LLVM representation
+
+
+Something to discuss: if we filter out unnecessary lets, we will not necessarily produce exactly the same output as the interpreter in error cases. Specifically, some type mismatch errors will appear only later in the program, since they would otherwise have been caught in an assign operation. 
+
+Personally, I think that the real solution to this problem is to do static type checking. However, if we are trying to reproduce the current type system exactly, we can't filter lets (or at least not all of them). 
