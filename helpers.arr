@@ -4,6 +4,10 @@ provide *
 
 import file as F
 
+data Pair<A,B>:
+  | pair(a :: A, b :: B)
+end
+
 fun get-file-text(filename :: String) -> String:
     f = F.input-file(filename)
     prog-txt = f.read-file()

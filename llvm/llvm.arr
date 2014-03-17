@@ -9,6 +9,10 @@ import "kind.arr" as K
 import "icmp.arr" as I
 import "fcmp.arr" as F
 
+data ProcedureBlock:
+  | Procedure(type :: K.TypeKind<K.is-FunctionType>, instructions :: List<Opcode>)
+end
+
 data Linkage:
   | External
   | Available_externally
@@ -47,214 +51,186 @@ CallConv = {
 data Attribute:
   | Zext
   | Sext
-  | Noreturn
-  | Inreg
+  | InReg
   | Structret
-  | Nounwind
-  | Noalias
+  | NoAlias
   | Byval
   | Nest
-  | Readnone
-  | Readonly
-  | Noinline
-  | Alwaysinline
+  | NoInline
+  | AlwaysInline
   | Optsize
   | Ssp
-  | Sspreq
+  | SspReq
   | Alignment(n :: Number)
   | Nocapture
   | Noredzone
-  | Noimplicitfloat
+  | NoImplicitFloat
   | Naked
   | Inlinehint
   | Stackalignment(n :: Number)
   | ReturnsTwice
   | UWTable
   | NonLazyBind
+sharing:
+  tostring(self):
+    cases(Attribute) self:
+      | Zext =>
+      | Sext =>
+      | InReg =>
+      | Structret =>
+      | NoAlias =>
+      | Byval =>
+      | Nest =>
+      | NoInline =>
+      | AlwaysInline =>
+      | Optsize =>
+      | Ssp =>
+      | SspReq =>
+      | Alignment(n) =>
+      | NoCapture =>
+      | NoRedzone =>
+      | NoImplicitFloat =>
+      | Naked =>
+      | Inlinehint =>
+      | StackAlignment(n) =>
+      | ReturnsTwice =>
+      | UWTable =>
+      | NonLazyBind =>
+    end
+  end
 end
 
 data VLPair:
-  # TODO what type should the label be? 
-  | ValueLabelPair(value :: K.ValueType, label :: String) with: 
-    tostring(self): 
-      "[ " + self.value.tostring() + ", " + self.label + " ]" 
+  # TODO what type should the label be?
+  | ValueLabelPair(value :: K.ValueType, label :: String) with:
+    tostring(self):
+      "[ " + self.value.tostring() + ", " + self.label + " ]"
     end
 end
 
-data Opcode:
+data Instruction:
+  | Assign(name :: String, op :: OpCode)
+  | NoAssign(op :: OpCode)
+  | Label(name :: String)
+sharing:
+  tostring(self) -> String:
+    cases(Instruction) self:
+      | Assign(name, op) => name + " := " + op.tostring() + "\n"
+      | NoAssign(op)     => op.tostring() + "\n"
+      | Label(name)      => name + ":\n"
+    end
+  end
+end
+
+data SwitchBranch:
+  | switch-branch(intty :: K.TypeKind, value, label :: String)
+end
+
+data FunctionAttribute:
+  | NoReturn
+  | NoUnwind
+  | ReadOnly
+  | ReadNone
+sharing:
+  tostring(self):
+    cases(FunctionAttribute) self:
+      | NoReturn => "noreturn"
+      | NoUnwind => "nounwind"
+      | ReadOnly => "readonly"
+      | ReadNone => "readnone"
+    end
+  end
+end
+
+data OpCode:
   | Invalid # not an instruction
   # Terminator Instructions
-  | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>) with: 
-    tostring(self): 
-      "ret " + self.typ.tostring()
-        + cases (Option<K.ValueKind>) self.value:
-            | none => ""
-            | some(val) => " " + val.tostring()
-          end
-    end
-  | Br
-  | Switch
+  | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>)
+  | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String)
+  | BrUnconditional(dest-label :: String)
+  | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>)
   | IndirectBr
   | Invoke
   | Invalid2
   | Unreachable
   # Standard Binary Operators
-  | Add(nuw :: Bool, 
-        nsw :: Bool, 
-        typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self):
-      "add " + if nuw: "nuw " else: "" end 
-        + if nsw: "nsw " else: "" end
-        + self.typ.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  | Add(nuw :: Bool,
+        nsw :: Bool,
+        typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
   | FAdd
-  | Sub(nuw :: Bool, 
-        nsw :: Bool, 
-        typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self):
-      "sub " + if nuw: "nuw " else: "" end 
-        + if nsw: "nsw " else: "" end
-        + self.typ.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  | Sub(nuw :: Bool,
+        nsw :: Bool,
+        typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
   | FSub
-  | Mul(nuw :: Bool, 
-        nsw :: Bool, 
-        typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self):
-      "mul " + if nuw: "nuw " else: "" end 
-        + if nsw: "nsw " else: "" end
-        + self.typ.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  | Mul(nuw :: Bool,
+        nsw :: Bool,
+        typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
   | FMul
-  | UDiv(exact :: Bool, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "udiv " + if exact: "exact " else: "" end 
-        + self.type.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | SDiv(exact :: Bool, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "sdiv " + if exact: "exact " else: "" end 
-        + self.type.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  | UDiv(exact :: Bool,
+         typ   :: K.TypeKind,
+         op1   :: K.ValueKind,
+         op2   :: K.ValueKind)
+  | SDiv(exact :: Bool,
+         typ   :: K.TypeKind,
+         op1   :: K.ValueKind,
+         op2   :: K.ValueKind)
   | FDiv
-  | URem(typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "urem " + self.type.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | SRem(typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "srem " + self.type.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  | URem(typ :: K.TypeKind,
+         op1 :: K.ValueKind,
+         op2 :: K.ValueKind)
+  | SRem(typ :: K.TypeKind,
+         op1 :: K.ValueKind,
+         op2 :: K.ValueKind)
   | FRem
-  # Logical Operators 
-  | Shl(nuw :: Bool, 
-        nsw :: Bool, 
-        typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self):
-      "shl " + if nuw: "nuw " else: "" end 
-        + if nsw: "nsw " else: "" end
-        + self.typ.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | LShr(exact :: Bool, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "lshr " + if exact: "exact " else: "" end 
-        + self.type.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | AShr(exact :: Bool, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with:
-    tostring(self): 
-      "ashr " + if exact: "exact " else: "" end 
-        + self.type.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | And(typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self): 
-      "and " + self.type.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | Or(typ :: K.TypeKind, 
-       op1 :: K.ValueKind, 
-       op2 :: K.ValueKind) with:
-    tostring(self): 
-      "or " + self.type.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | Xor(typ :: K.TypeKind, 
-        op1 :: K.ValueKind, 
-        op2 :: K.ValueKind) with:
-    tostring(self): 
-      "xor " + self.type.tostring() + " " 
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
+  # Logical Operators
+  | Shl(nuw :: Bool,
+        nsw :: Bool,
+        typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
+  | LShr(exact :: Bool,
+         typ   :: K.TypeKind,
+         op1   :: K.ValueKind,
+         op2   :: K.ValueKind)
+  | AShr(exact :: Bool,
+         typ   :: K.TypeKind,
+         op1   :: K.ValueKind,
+         op2   :: K.ValueKind)
+  | And(typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
+  | Or(typ :: K.TypeKind,
+       op1 :: K.ValueKind,
+       op2 :: K.ValueKind)
+  | Xor(typ :: K.TypeKind,
+        op1 :: K.ValueKind,
+        op2 :: K.ValueKind)
   # Memory Operators
-  | Alloca(typ :: K.TypeKind) with: 
-    tostring(self): "alloca " + self.typ.tostring() end
-  | Load(typ :: K.TypeKind, ptr :: K.ValueKind) with: 
-    tostring(self): "load " + typ.tostring() + " " + ptr.tostring() end
-  | Store(volatiile :: Bool,  # TODO let's make atomic stores a different type
-          value-typ :: K.TypeKind, 
-          value :: K.ValueKind, 
-          ptr-typ :: K.TypeKind, 
+  | Alloca(typ :: K.TypeKind)
+  | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
+  | Store(volatile :: Bool,  # TODO let's make atomic stores a different type
+          value-typ :: K.TypeKind,
+          value :: K.ValueKind,
+          ptr-typ :: K.TypeKind,
           ptr :: K.ValueKind,
           alignment :: Option<Number>,
-          nontemporal :: Option<K.ValueKind>) with: 
-    tostring(self): 
-      "store " + if self.volatile: "volatile " else: "" end
-        + self.value-typ.tostring() + " " + self.value.tostring() + ", "
-        + self.ptr-typ.tostring() + " " + self.ptr.tostring()
-        + cases (Option<Number>) self.alignment: 
-            | none => ""
-            | some(val) => ", align " + val.tostring()
-          end
-        + cases (Option<K.ValueKind>) self.nontemporal: 
-            | none => ""
-            | some(val) => " !nontemporal !" + val.tostring()
-          end
-    end
-  | StoreAtomic(volatiile :: Bool,  # TODO let's make atomic stores a different type
-                value-typ :: K.TypeKind, 
-                value :: K.ValueKind, 
-                ptr-typ :: K.TypeKind, 
+          nontemporal :: Option<K.ValueKind>)
+  | StoreAtomic(volatile :: Bool,  # TODO let's make atomic stores a different type
+                value-typ :: K.TypeKind,
+                value :: K.ValueKind,
+                ptr-typ :: K.TypeKind,
                 ptr :: K.ValueKind,
-                singlethread :: Bool) 
-                #ordering :: 
+                singlethread :: Bool)
+                #ordering ::
                 #alignment ::
-                # TODO TODO TODO 
-  | GetElementPtr
+                # TODO TODO TODO
+  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<Pair<K.TypeKind, Number>>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -269,54 +245,27 @@ data Opcode:
   | IntToPtr
   | BitCast
   # Other Operators
-  | ICmp(cond :: I.Icmp, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with: 
-    tostring(self): 
-      "icmp " + self.cond.tostring() + " " + self.typ.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | FCmp(cond :: F.Fcmp, 
-         typ :: K.TypeKind, 
-         op1 :: K.ValueKind, 
-         op2 :: K.ValueKind) with: 
-    tostring(self): 
-      "fcmp " + self.cond.tostring() + " " + self.typ.tostring() + " "
-        + self.op1.tostring() + ", " + self.op2.tostring()
-    end
-  | PHI(typ :: K.TypeKind,
-        pairs :: List<>) with:
-    tostring(self): 
-      "phi " + self.typ.tostring() + " " + self.pairs.join-str(", ")
-    end
-  | Call(tail :: Bool, 
-         cconv :: Number, # TODO really? 
-         #attrs :: List<Attribute>, # TODO not something else? 
-         ret :: K.TypeKind,
-         # TODO fnty?
-         func :: K.ValueKind,
-         args :: List<ArgPair># TODO more attributes!
-         # TODO NOT DONE --- just need a break. 
-         ) with:
-    tostring(self): 
-      "call " + if self.tail: "tail " else: "" end
-        + "cc " + self.cconv.tostring() + " " # TODO change this
-        + self.ret.tostring() + " " + self.func.tostring() + "("
-        + self.args.join-str(", ") + ")"
-    end
-  | Select(selty :: ???, 
-           cond :: K.ValueKind, 
-           typ1 :: K.TypeKind, 
-           val1 :: K.ValueKind, 
-           typ2 :: K.TypeKind, 
-           val2 :: K.ValueKind) with: 
-    tostring(self): 
-      selty-str = self.selty.tostring() # TODO TODO TODO
-      "select " + selty-str + " " + self.cond.tostring() + ", "
-        + self.typ1.tostring() + " " + self.val1.tostring() + ", "
-        + self.typ2.tostring() + " " + self.val2.tostring()
-    end
+  | ICmp(cond :: I.Icmp,
+         typ  :: K.TypeKind,
+         op1  :: K.ValueKind,
+         op2  :: K.ValueKind)
+  | FCmp(cond :: F.Fcmp,
+         typ  :: K.TypeKind,
+         op1  :: K.ValueKind,
+         op2  :: K.ValueKind)
+  | PHI(typ   :: K.TypeKind, pairs :: List<Pair<K.TypeKind,String>>)
+  | Call(tail   :: Bool,
+         cconv  :: String,
+         retty  :: K.TypeKind,
+         func   :: String,
+         args   :: List<ArgPair>,
+         fattrs :: List<FunctionAttribute>)
+  | Select(selty :: K.TypeKind,
+           cond :: K.ValueKind,
+           typ1 :: K.TypeKind,
+           val1 :: K.ValueKind,
+           typ2 :: K.TypeKind,
+           val2 :: K.ValueKind)
   | UserOp1
   | UserOp2
   | VAArg
@@ -330,6 +279,135 @@ data Opcode:
   | AtomicRMW
   | Resume
   | LandingPad
+sharing:
+  tostring(self) -> String:
+    cases(OpCode) self:
+      | Invalid =>
+      | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>) =>
+        "ret " + typ.tostring()
+          + cases (Option<K.ValueKind>) value:
+              | none => ""
+              | some(val) => " " + val.tostring()
+            end
+      | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String) =>
+      | BrUnconditional(dest-label :: String) =>
+      | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>) =>
+      | IndirectBr =>
+      | Invoke =>
+      | Invalid2 =>
+      | Unreachable =>
+      | Add(nuw, nsw, typ, op1, op2) =>
+        "add " + if nuw: "nuw " else: "" end
+          + if nsw: "nsw " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | FAdd =>
+      | Sub(nuw, nsw, typ, op1, op2) =>
+        "sub " + if nuw: "nuw " else: "" end
+          + if nsw: "nsw " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | FSub =>
+      | Mul(nuw, nsw, typ, op1, op2) =>
+        "mul " + if nuw: "nuw " else: "" end
+          + if nsw: "nsw " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | UDiv(exact, typ, op1, op2) =>
+        "udiv " + if exact: "exact " else: "" end
+          + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | SDiv(exact, typ, op1, op2) =>
+        "sdiv " + if exact: "exact " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | FDiv =>
+      | URem(typ, op1, op2) =>
+        "urem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | SRem(typ, op1, op2) =>
+        "srem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | FRem =>
+      | Shl(nuw, nsw, typ, op1, op2) =>
+        "shl " + if nuw: "nuw " else: "" end
+          + if nsw: "nsw " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | LShr(exact, typ, op1, op2) =>
+        "lshr " + if exact: "exact " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | AShr(exact, typ, op1, op2) =>
+        "ashr " + if exact: "exact " else: "" end
+          + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | And(typ, op1, op2) =>
+        "and " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | Or(typ, op1, op2) =>
+        "or " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | Xor(typ, op1, op2) =>
+        "xor " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
+      | Alloca(typ) =>
+        "alloca " + self.typ.tostring()
+      | Load(typ, ptr) =>
+        "load " + typ.tostring() + " " + ptr.tostring()
+      | Store(volatile, value-typ, value, ptr-typ, ptr, alignment, nontemporal) =>
+        "store " + if volatile: "volatile " else: "" end
+          + value-typ.tostring() + " " + value.tostring() + ", "
+          + ptr-typ.tostring() + " " + ptr.tostring()
+          + cases (Option<Number>) alignment:
+              | none => ""
+              | some(val) => ", align " + val.tostring()
+            end
+          + cases (Option<K.ValueKind>) nontemporal:
+              | none => ""
+              | some(val) => " !nontemporal !" + val.tostring()
+            end
+      | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
+      | GetElementPtr(inbound, pty, val, access) =>
+      | Trunc =>
+      | ZExt =>
+      | SExt =>
+      | FPToUI =>
+      | FPToSI =>
+      | UIToFP =>
+      | SIToFP =>
+      | FPTrunc =>
+      | FPExt =>
+      | PtrToInt =>
+      | IntToPtr =>
+      | BitCast =>
+      | ICmp(cond, typ, op1, op2) =>
+        "icmp " + cond.tostring() + " " + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | FCmp(cond, typ, op1, op2) =>
+        "fcmp " + cond.tostring() + " " + typ.tostring() + " "
+          + op1.tostring() + ", " + op2.tostring()
+      | PHI(typ, pairs) =>
+        "phi " + typ.tostring() + " " + pairs.join-str(", ")
+      | Call(tail, cconv, retty, func, args, fattrs) =>
+        "call " + if tail: "tail " else: "" end
+          + cconv + " " # TODO change this
+          + retty.tostring() + " " + func.tostring() + "("
+          + args.join-str(", ") + ")"
+      | Select(selty, cond, typ1, val1, typ2, val2) =>
+        selty-str = selty.tostring()
+        "select " + selty-str + " " + cond.tostring() + ", "
+          + typ1.tostring() + " " + val1.tostring() + ", "
+          + typ2.tostring() + " " + val2.tostring()
+      | UserOp1 =>
+      | UserOp2 =>
+      | VAArg =>
+      | ExtractElement =>
+      | InsertElement =>
+      | ShuffleVector =>
+      | ExtractValue(agtyp, val, idxs)  =>
+      | InsertValue =>
+      | Fence =>
+      | AtomicCmpXchg =>
+      | AtomicRMW =>
+      | Resume =>
+      | LandingPad =>
+    end
+  end
 end
 
 data LandingPadClauseTy:
