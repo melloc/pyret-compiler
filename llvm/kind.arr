@@ -2,7 +2,11 @@
 
 provide *
 
-import "llvm.arr" as LLVM
+# import "llvm.arr" as LLVM
+
+data TypeKindField:
+  | TypeField(name :: String, kind :: TypeKind)
+end
 
 data TypeKind:
   | Void with: 
@@ -27,14 +31,14 @@ data TypeKind:
     tostring(self): 
       self.ret.tostring() + " (" + self.params.join-str(", ") + ")"
     end
-  | Struct(fields :: List<TypeKind>, packed :: Bool) with:
+  | Struct(fields :: List<TypeField>, packed :: Bool) with:
     tostring(self):
       inside = self.fields.join-str(", ")
-      if packed: "<" + inside + ">" else: inside end
+      if self.packed: "<" + inside + ">" else: inside end
     end
   | Arr(len :: Number, typ :: TypeKind) with:
     tostring(self): 
-      "[" + self.len.tostring() + " x " + self.typ.tostring() "]"
+      "[" + self.len.tostring() + " x " + self.typ.tostring() + "]"
     end
   | Pointer(typ :: TypeKind, addrspace :: Option<Number>) with:
     tostring(self): 
@@ -75,5 +79,5 @@ data ValueKind:
   | GlobalAlias
   | GlobalVariable
   | UndefValue
-  | Instruction(op :: LLVM.Opcode)
+  | Instruction #(op :: LLVM.Opcode)
 end
