@@ -84,20 +84,20 @@ data Value:
 end
 
 data LProgram:
-  | l-prog(constants :: List<LConstants>, procs :: List<LProcedure>)
+  | l-prog(constants :: List<LConstants>, procs :: List<LProcedure>, adts :: List<LADT>)
 end
 
 data LBind:
     l-bind(id :: String, ann :: N.ABind)
 end
 
-data LProcedure: 
+data LProcedure:
     l-proc(args :: List<N.ABind>, ret :: A.Ann, body :: LExpression)
 end
 
 data LLettable:
- | l-application(f :: String, args :: List<String>)
- | l-select(field :: Int, id :: String)
+  | l-application(f :: String, args :: List<String>)
+  | l-select(field :: Int, id :: String)
 end
 
 data LBranch:
@@ -105,10 +105,10 @@ data LBranch:
 end
 
 data LExpression:
- | l-switch(value :: String, branches :: List<LBranch>, default :: Option<LExpression>)
- | l-let(binding :: N.ABind, e :: LLettable, body :: LExpression)
- | l-assign(binding :: String, e :: LLettable)
- | l-if(cond :: String, consq :: LExpression, altern :: LExpression)
+  | l-switch(value :: String, branches :: List<LBranch>, default :: Option<LExpression>)
+  | l-let(binding :: N.ABind, e :: LLettable, body :: LExpression)
+  | l-assign(binding :: String, e :: LLettable)
+  | l-if(cond :: String, consq :: LExpression, altern :: LExpression)
 end
 
 fun ann-to-type(annotation :: A.Ann) -> K.TypeKind:
@@ -209,7 +209,7 @@ end
 
 fun low-to-llvm(prog :: LProgram):
   cases(LProgram) prog:
-    | l-prog(constants, procedures) =>
+    | l-prog(constants, procedures, adts) =>
       for map(proc from procedures):
         cases(LProcedure) proc:
           | l-proc(args, ret, body) =>
@@ -223,7 +223,5 @@ fun low-to-llvm(prog :: LProgram):
 end
 
 check:
-    low-to-llvm(l-prog(empty,
-        empty
-    ))
+    low-to-llvm(l-prog(empty, empty, empty))
 end
