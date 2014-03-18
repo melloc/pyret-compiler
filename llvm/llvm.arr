@@ -8,9 +8,34 @@ provide *
 import "kind.arr" as K
 import "icmp.arr" as I
 import "fcmp.arr" as F
+import "../helpers.arr" as H
 
 data ProcedureBlock:
   | Procedure(type :: K.TypeKind<K.is-FunctionType>, instructions :: List<Opcode>)
+end
+
+data CallingConvention:
+  | CCC
+  | FastCC
+  | ColdCC
+  | CC(n :: Number)
+  | WebKitJSCC
+  | AnyRegCC
+  | PreserveMostCC
+  | PreserveAllCC
+sharing:
+  tostring(self):
+    cases(CallingConvention) self:
+      | CCC            => "ccc"
+      | FastCC         => "fastcc"
+      | ColdCC         => "coldcc"
+      | CC(n)          => "cc " + n.tostring()
+      | WebKitJSCC     => "webkit_jscc"
+      | AnyRegCC       => "anyregcc"
+      | PreserveMostCC => "preserve_mostcc"
+      | PreserveAllCC  => "preserve_allcc"
+    end
+  end
 end
 
 data Linkage:
@@ -214,12 +239,12 @@ data OpCode:
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
   | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
-  | Store(volatile :: Bool,  # TODO let's make atomic stores a different type
-          value-typ :: K.TypeKind,
-          value :: K.ValueKind,
-          ptr-typ :: K.TypeKind,
-          ptr :: K.ValueKind,
-          alignment :: Option<Number>,
+  | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
+          value-typ   :: K.TypeKind,
+          value       :: K.ValueKind,
+          ptr-typ     :: K.TypeKind,
+          ptr         :: K.ValueKind,
+          alignment   :: Option<Number>,
           nontemporal :: Option<K.ValueKind>)
   | StoreAtomic(volatile :: Bool,  # TODO let's make atomic stores a different type
                 value-typ :: K.TypeKind,
@@ -230,7 +255,7 @@ data OpCode:
                 #ordering ::
                 #alignment ::
                 # TODO TODO TODO
-  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<Pair<K.TypeKind, Number>>)
+  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<H.Pair<K.TypeKind, Number>>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -243,7 +268,7 @@ data OpCode:
   | FPExt
   | PtrToInt
   | IntToPtr
-  | BitCast
+  | BitCast(from-ty :: K.TypeKind, value, to-ty :: K.TypeKind)
   # Other Operators
   | ICmp(cond :: I.Icmp,
          typ  :: K.TypeKind,
@@ -255,7 +280,7 @@ data OpCode:
          op2  :: K.ValueKind)
   | PHI(typ   :: K.TypeKind, pairs :: List<Pair<K.TypeKind,String>>)
   | Call(tail   :: Bool,
-         cconv  :: String,
+         cconv  :: CallingConvention,
          retty  :: K.TypeKind,
          func   :: String,
          args   :: List<ArgPair>,
@@ -285,31 +310,45 @@ sharing:
       | Invalid =>
       | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>) =>
         "ret " + typ.tostring()
-          + cases (Option<K.ValueKind>) value:
+          + cases(Option<K.ValueKind>) value:
               | none => ""
               | some(val) => " " + val.tostring()
             end
       | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String) =>
+        "br i1 " + cond-id + ", label " + consq-label + ", label " + altern-label
       | BrUnconditional(dest-label :: String) =>
+        "br " + dest-label
       | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>) =>
+        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default 
+          + cases(List) branches:
+              | empty => ""
+              | link(_, _) => 
+                for fold(base from " [ ", current from branches): 
+                  base + current.tostring() 
+                end + " ] "
+            end
       | IndirectBr =>
       | Invoke =>
       | Invalid2 =>
       | Unreachable =>
+        "unreachable"
       | Add(nuw, nsw, typ, op1, op2) =>
-        "add " + if nuw: "nuw " else: "" end
+        "add " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FAdd =>
       | Sub(nuw, nsw, typ, op1, op2) =>
-        "sub " + if nuw: "nuw " else: "" end
+        "sub " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FSub =>
       | Mul(nuw, nsw, typ, op1, op2) =>
-        "mul " + if nuw: "nuw " else: "" end
+        "mul " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -327,7 +366,8 @@ sharing:
         "srem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
       | FRem =>
       | Shl(nuw, nsw, typ, op1, op2) =>
-        "shl " + if nuw: "nuw " else: "" end
+        "shl " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -353,28 +393,35 @@ sharing:
         "store " + if volatile: "volatile " else: "" end
           + value-typ.tostring() + " " + value.tostring() + ", "
           + ptr-typ.tostring() + " " + ptr.tostring()
-          + cases (Option<Number>) alignment:
+          + cases(Option<Number>) alignment:
               | none => ""
               | some(val) => ", align " + val.tostring()
             end
-          + cases (Option<K.ValueKind>) nontemporal:
+          + cases(Option<K.ValueKind>) nontemporal:
               | none => ""
               | some(val) => " !nontemporal !" + val.tostring()
             end
       | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
-      | GetElementPtr(inbound, pty, val, access) =>
-      | Trunc =>
-      | ZExt =>
-      | SExt =>
-      | FPToUI =>
-      | FPToSI =>
-      | UIToFP =>
-      | SIToFP =>
-      | FPTrunc =>
-      | FPExt =>
+      | GetElementPtr(inbound, pty, val, accesses) =>
+        "getelementptr " + if inbound: "inbound " else: "" end + pty.tostring() + "*"
+          + for fold(base from "", access from accesses):
+              cases(H.Pair) access:
+                | pair(ty, idx) => base + ", " + ty.tostring() + " " + idx.tostring()
+              end
+            end
+      | Trunc    =>
+      | ZExt     =>
+      | SExt     =>
+      | FPToUI   =>
+      | FPToSI   =>
+      | UIToFP   =>
+      | SIToFP   =>
+      | FPTrunc  =>
+      | FPExt    =>
       | PtrToInt =>
       | IntToPtr =>
-      | BitCast =>
+      | BitCast(from-ty, value, to-ty) =>
+        "bitcast " + from-ty.tostring() + " " + value.tostring() + " to " + to-ty.tostring()
       | ICmp(cond, typ, op1, op2) =>
         "icmp " + cond.tostring() + " " + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -385,7 +432,7 @@ sharing:
         "phi " + typ.tostring() + " " + pairs.join-str(", ")
       | Call(tail, cconv, retty, func, args, fattrs) =>
         "call " + if tail: "tail " else: "" end
-          + cconv + " " # TODO change this
+          + cconv.tostring() + " " # TODO change this
           + retty.tostring() + " " + func.tostring() + "("
           + args.join-str(", ") + ")"
       | Select(selty, cond, typ1, val1, typ2, val2) =>
@@ -395,17 +442,17 @@ sharing:
           + typ2.tostring() + " " + val2.tostring()
       | UserOp1 =>
       | UserOp2 =>
-      | VAArg =>
+      | VAArg   =>
       | ExtractElement =>
-      | InsertElement =>
-      | ShuffleVector =>
+      | InsertElement  =>
+      | ShuffleVector  =>
       | ExtractValue(agtyp, val, idxs)  =>
-      | InsertValue =>
-      | Fence =>
-      | AtomicCmpXchg =>
-      | AtomicRMW =>
-      | Resume =>
-      | LandingPad =>
+      | InsertValue    =>
+      | Fence          =>
+      | AtomicCmpXchg  =>
+      | AtomicRMW      =>
+      | Resume         =>
+      | LandingPad     =>
     end
   end
 end

@@ -159,7 +159,7 @@ char-star = K.Pointer(K.Integer(8), none)
 fun l-lettable-to-llvm(l :: LLettable, adts :: LADT) -> L.OpCode:
   cases(LLettable) l:
     | l-application(f, args) => 
-      L.Call(false, "ccc", char-star, f, for map(arg from args):
+      L.Call(false, L.CCC, char-star, f, for map(arg from args):
         L.ArgPair(char-star, arg)
       end, empty)
     | l-select(field, id) => raise("l-select not yet handled") # This should go to getelementptr
