@@ -8,45 +8,128 @@ provide *
 import "kind.arr" as K
 import "icmp.arr" as I
 import "fcmp.arr" as F
+import "../helpers.arr" as H
+
+data ModuleBlock:
+  | Module(constants :: List<Constant>, procedures :: List<ProcedureBlock>)
+sharing:
+  tostring(self) -> String:
+    cases(ModuleBlock) self:
+      | Module(constants, procedures) =>
+        constant-string = for map(constant from constants): 
+          constant.tostring() 
+        end.join("\n")
+        procedure-string = for map(procedure from procedures): 
+          procedure.tostring() 
+        end.join("\n")
+        constant-string + "\n" + procedure-string
+    end
+  end
+end
+
 
 data ProcedureBlock:
-  | Procedure(type :: K.TypeKind<K.is-FunctionType>, instructions :: List<Opcode>)
+  | Procedure(name         :: String,
+              ret-type     :: K.TypeKind, 
+              params       :: List<K.TypeKindField>, 
+              instructions :: List<Instruction>)
+sharing:
+  tostring(self) -> String:
+    cases(ProcedureBlock) self:
+      | Procedure(name, type, params, instructions) =>
+        "define " + type.tostring() + " @" + name + "("
+          + (for map(param from params):
+              cases(K.TypeKindField) param:
+                | TypeField(param-name, kind) => kind.tostring() + " %" + param-name
+              end
+            end).join(", ")
+          + ") {\n"
+          + for fold(base from "", instruction from instructions):
+              base + instruction.tostring() + "\n"
+            end
+          + "}\n"
+    end
+  end
+end
+
+
+data CallingConvention:
+  | CCC
+  | FastCC
+  | ColdCC
+  | CC(n :: Number)
+  | WebKitJSCC
+  | AnyRegCC
+  | PreserveMostCC
+  | PreserveAllCC
+sharing:
+  tostring(self):
+    cases(CallingConvention) self:
+      | CCC            => "ccc"
+      | FastCC         => "fastcc"
+      | ColdCC         => "coldcc"
+      | CC(n)          => "cc " + n.tostring()
+      | WebKitJSCC     => "webkit_jscc"
+      | AnyRegCC       => "anyregcc"
+      | PreserveMostCC => "preserve_mostcc"
+      | PreserveAllCC  => "preserve_allcc"
+    end
+  end
 end
 
 data Linkage:
   | External
-  | Available_externally
-  | Link_once
-  | Link_once_odr
-  | Link_once_odr_auto_hide
+  | AvailableExternally
+  | LinkOnce
+  | LinkOnceODR
+  | LinkOnceODRAutoHide
   | Weak
-  | Weak_odr
+  | WeakODR
   | Appending
   | Internal
   | Private
-  | Dllimport
-  | Dllexport
-  | External_weak
-  | Ghost
+  | DLLImport
+  | DLLExport
+  | ExternalWeak
   | Common
-  | Linker_private
-  | Linker_private_weak
+  | LinkerPrivate
+  | LinkerPrivateWeak
+sharing:
+  tostring(self) -> String:
+    cases(Linkage) self:
+      | External            => "external"
+      | AvailableExternally => "available_externally"
+      | LinkOnce            => "linkonce"
+      | LinkOnceODR         => "linkonce_odr"
+      | LinkOnceODRAutoHide => "linkonce_odr_auto_hide"
+      | Weak                => "weak"
+      | WeakODR             => "weak_odr"
+      | Appending           => "appending"
+      | Internal            => "internal"
+      | Private             => "private"
+      | DLLImport           => "dllimport"
+      | DLLExport           => "dllexport"
+      | ExternalWeak        => "extern_weak"
+      | Common              => "common"
+      | LinkerPrivate       => "linker_private"
+      | LinkerPrivateWeak   => "linker_private_weak"
+    end
+  end
 end
 
 data Visibility:
   | Default
   | Hidden
   | Protected
+sharing:
+  tostring(self) -> String:
+    cases(Visibility) self:
+      | Default   => "default"
+      | Hidden    => "hidden"
+      | Protected => "protected"
+    end
+  end
 end
-
-
-CallConv = {
-    c : 0,
-    fast : 8,
-    cold : 9,
-    x86_stdcall : 64,
-    x86_fastcall : 65
-}
 
 data Attribute:
   | Zext
@@ -115,9 +198,9 @@ data Instruction:
 sharing:
   tostring(self) -> String:
     cases(Instruction) self:
-      | Assign(name, op) => name + " := " + op.tostring() + "\n"
-      | NoAssign(op)     => op.tostring() + "\n"
-      | Label(name)      => name + ":\n"
+      | Assign(name, op) => name + " := " + op.tostring()
+      | NoAssign(op)     => op.tostring()
+      | Label(name)      => name + ":"
     end
   end
 end
@@ -213,13 +296,13 @@ data OpCode:
         op2 :: K.ValueKind)
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
-  | Store(volatile :: Bool,  # TODO let's make atomic stores a different type
-          value-typ :: K.TypeKind,
-          value :: K.ValueKind,
-          ptr-typ :: K.TypeKind,
-          ptr :: K.ValueKind,
-          alignment :: Option<Number>,
+  | Load(typ :: K.TypeKind, ptr)
+  | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
+          value-typ   :: K.TypeKind,
+          value       :: K.ValueKind,
+          ptr-typ     :: K.TypeKind,
+          ptr         :: K.ValueKind,
+          alignment   :: Option<Number>,
           nontemporal :: Option<K.ValueKind>)
   | StoreAtomic(volatile :: Bool,  # TODO let's make atomic stores a different type
                 value-typ :: K.TypeKind,
@@ -230,7 +313,7 @@ data OpCode:
                 #ordering ::
                 #alignment ::
                 # TODO TODO TODO
-  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<Pair<K.TypeKind, Number>>)
+  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<H.Pair<K.TypeKind, Number>>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -243,7 +326,7 @@ data OpCode:
   | FPExt
   | PtrToInt
   | IntToPtr
-  | BitCast
+  | BitCast(from-ty :: K.TypeKind, value, to-ty :: K.TypeKind)
   # Other Operators
   | ICmp(cond :: I.Icmp,
          typ  :: K.TypeKind,
@@ -255,7 +338,7 @@ data OpCode:
          op2  :: K.ValueKind)
   | PHI(typ   :: K.TypeKind, pairs :: List<Pair<K.TypeKind,String>>)
   | Call(tail   :: Bool,
-         cconv  :: String,
+         cconv  :: CallingConvention,
          retty  :: K.TypeKind,
          func   :: String,
          args   :: List<ArgPair>,
@@ -283,33 +366,47 @@ sharing:
   tostring(self) -> String:
     cases(OpCode) self:
       | Invalid =>
-      | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>) =>
+      | Ret(typ, value) =>
         "ret " + typ.tostring()
-          + cases (Option<K.ValueKind>) value:
+          + cases(Option<K.ValueKind>) value:
               | none => ""
               | some(val) => " " + val.tostring()
             end
-      | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String) =>
+      | BrConditional(cond-id, consq-label, altern-label) =>
+        "br i1 " + cond-id + ", label " + consq-label + ", label " + altern-label
       | BrUnconditional(dest-label :: String) =>
-      | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>) =>
+        "br " + dest-label
+      | Switch(intty, value, default, branches) =>
+        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default 
+          + cases(List) branches:
+              | empty => ""
+              | link(_, _) => 
+                for fold(base from " [ ", current from branches): 
+                  base + current.tostring() 
+                end + " ] "
+            end
       | IndirectBr =>
       | Invoke =>
       | Invalid2 =>
       | Unreachable =>
+        "unreachable"
       | Add(nuw, nsw, typ, op1, op2) =>
-        "add " + if nuw: "nuw " else: "" end
+        "add " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FAdd =>
       | Sub(nuw, nsw, typ, op1, op2) =>
-        "sub " + if nuw: "nuw " else: "" end
+        "sub " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FSub =>
       | Mul(nuw, nsw, typ, op1, op2) =>
-        "mul " + if nuw: "nuw " else: "" end
+        "mul " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -327,7 +424,8 @@ sharing:
         "srem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
       | FRem =>
       | Shl(nuw, nsw, typ, op1, op2) =>
-        "shl " + if nuw: "nuw " else: "" end
+        "shl " 
+          + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -353,28 +451,35 @@ sharing:
         "store " + if volatile: "volatile " else: "" end
           + value-typ.tostring() + " " + value.tostring() + ", "
           + ptr-typ.tostring() + " " + ptr.tostring()
-          + cases (Option<Number>) alignment:
+          + cases(Option<Number>) alignment:
               | none => ""
               | some(val) => ", align " + val.tostring()
             end
-          + cases (Option<K.ValueKind>) nontemporal:
+          + cases(Option<K.ValueKind>) nontemporal:
               | none => ""
               | some(val) => " !nontemporal !" + val.tostring()
             end
       | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
-      | GetElementPtr(inbound, pty, val, access) =>
-      | Trunc =>
-      | ZExt =>
-      | SExt =>
-      | FPToUI =>
-      | FPToSI =>
-      | UIToFP =>
-      | SIToFP =>
-      | FPTrunc =>
-      | FPExt =>
+      | GetElementPtr(inbound, pty, val, accesses) =>
+        "getelementptr " + if inbound: "inbound " else: "" end + pty.tostring() + "*"
+          + for fold(base from "", access from accesses):
+              cases(H.Pair) access:
+                | pair(ty, idx) => base + ", " + ty.tostring() + " " + idx.tostring()
+              end
+            end
+      | Trunc    =>
+      | ZExt     =>
+      | SExt     =>
+      | FPToUI   =>
+      | FPToSI   =>
+      | UIToFP   =>
+      | SIToFP   =>
+      | FPTrunc  =>
+      | FPExt    =>
       | PtrToInt =>
       | IntToPtr =>
-      | BitCast =>
+      | BitCast(from-ty, value, to-ty) =>
+        "bitcast " + from-ty.tostring() + " " + value.tostring() + " to " + to-ty.tostring()
       | ICmp(cond, typ, op1, op2) =>
         "icmp " + cond.tostring() + " " + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
@@ -385,7 +490,7 @@ sharing:
         "phi " + typ.tostring() + " " + pairs.join-str(", ")
       | Call(tail, cconv, retty, func, args, fattrs) =>
         "call " + if tail: "tail " else: "" end
-          + cconv + " " # TODO change this
+          + cconv.tostring() + " " # TODO change this
           + retty.tostring() + " " + func.tostring() + "("
           + args.join-str(", ") + ")"
       | Select(selty, cond, typ1, val1, typ2, val2) =>
@@ -395,17 +500,17 @@ sharing:
           + typ2.tostring() + " " + val2.tostring()
       | UserOp1 =>
       | UserOp2 =>
-      | VAArg =>
+      | VAArg   =>
       | ExtractElement =>
-      | InsertElement =>
-      | ShuffleVector =>
+      | InsertElement  =>
+      | ShuffleVector  =>
       | ExtractValue(agtyp, val, idxs)  =>
-      | InsertValue =>
-      | Fence =>
-      | AtomicCmpXchg =>
-      | AtomicRMW =>
-      | Resume =>
-      | LandingPad =>
+      | InsertValue    =>
+      | Fence          =>
+      | AtomicCmpXchg  =>
+      | AtomicRMW      =>
+      | Resume         =>
+      | LandingPad     =>
     end
   end
 end
@@ -421,4 +526,52 @@ data ThreadLocalMode:
   | LocalDynamic
   | InitialExec
   | LocalExec
+sharing:
+  tostring(self) -> String:
+    cases(ThreadLocalMode) self:
+      | None           => ""
+      | GeneralDynamic => "generaldynamic"
+      | LocalDynamic   => "localdynamic"
+      | InitialExec    => "initialexec"
+      | LocalExec      => "localexec"
+    end
+  end
+end
+
+data GlobalMode:
+  | GlobalConstant(value :: K.ValueKind)
+  | GlobalVariable
+end
+
+data Global:
+  | GlobalDecl(var-name     :: String,
+               linkage      :: Linkage, 
+               visibility   :: Visibility, 
+               storage-class, 
+               thread-local :: ThreadLocalMode, 
+               mode         :: GlobalMode,
+               ty           :: K.TypeKind, 
+               section      :: Option<String>, 
+               align        :: Option<Number>)
+sharing:
+  tostring(self) -> String:
+    cases(Global) self:
+      | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local, 
+                   mode, ty, section, align) =>
+        "@" + var-name + " = " + linkage.tostring() + " " + storage-class.tostring()
+          + thread-local.tostring()
+          + cases(GlobalMode) mode:
+              | GlobalConstant(value) => "constant " + ty.tostring() + " " + value.tostring()
+              | GlobalVariable        => "global " + ty.tostring()
+            end
+          + cases(Option<String>) section:
+              | some(s) => ", section \"" + s + "\""
+              | none    => ""
+            end
+          + cases(Option<Number>) align:
+              | some(n) => ", align " + n.tostring()
+              | none    => ""
+            end
+    end
+  end
 end

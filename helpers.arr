@@ -4,6 +4,12 @@ provide *
 
 import file as F
 
+fun flatten(alol):
+  for fold(base from [], current from alol):
+    base.append(current)
+  end
+end
+
 data Pair<A,B>:
   | pair(a :: A, b :: B)
 end
