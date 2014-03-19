@@ -52,6 +52,8 @@ string-id-prefix = "%str.p"
 bool-id-true = "%bool.p-true"
 bool-id-false = "%bool.p-false"
 
+closure-id = "%closure.p"
+
 num-len = 10
 
 
@@ -78,7 +80,6 @@ data HLettable:
     tosyn(self): self.id end # TODO something else? 
   | h-unbox(id :: String) with: 
     tosyn(self): "unbox " + self.id end
-  | h-data(name :: String, closure :: Set<String>)
   | h-lam(f :: String, closure :: Set<String>) with:
     tosyn(self): self.f + "{" + self.closure.to-list().str-join(",") + "}" end
   | h-app(f :: String, args :: List<String>) with:
@@ -302,7 +303,6 @@ fun get-free-vars(ex :: HExpr, alrdy :: Set<String>) -> Set<String>:
     cases (HLettable) lettable: 
       | h-id(id) => check-merge(id, already)
       | h-unbox(id) => check-merge(id, already)
-      | h-data(name, closure) => closure
       | h-lam(f, closure) => closure
       | h-app(func, args) => 
           for fold(s from check-merge(func, already), a from args):
@@ -413,9 +413,10 @@ fun let-lettable(bind :: N.ABind,
             | link(f, r) => h-let(N.a-bind(f, A.a_blank),
                                   dvals.first, 
                                   do-let-bindings(r, dvals.rest, body))
-            | empty => h-let(bind, 
-                             h-data(name, set(data-tmps)), 
-                             aexpr-h(body, vs, binds))
+            | empty => aexpr-h(body, vs, binds)
+                # h-let(bind, 
+                    h-data(name, set(data-tmps)), 
+                    aexpr-h(body, vs, binds))
           end
         end
 
@@ -475,9 +476,22 @@ fun let-lettable(bind :: N.ABind,
     | a-lam(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
-        closure = get-free-vars(fbody)
-        funcs := link(named-func(name, args, ret, fbody, closure), funcs)
-        h-let(bind, h-lam(name, closure), aexpr-h(b, vs, binds))
+        # TODO we also need to change the body to bind everything that was
+        # inside of that closure. It would probably be a good idea to just 
+        # assume that it is the same as an object. Do for methods to.
+        funcs := link(
+          named-func(name, 
+                     [closure-id] + args, 
+                     ret, 
+                     for fold(base from fbody,
+                              vid from get-free-vars(fbody).to-list()):
+                       h-let(N.a-bind(vid, A.a_blank),
+                             h-dot(closure-id, N.a-bind(vid, A.a_blank)),
+                             base)
+                     end),
+          funcs
+        )
+        h-let(bind, h-lam(name), aexpr-h(b, vs, binds))
     | a-method(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
