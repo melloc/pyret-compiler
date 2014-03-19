@@ -12,6 +12,19 @@ import "../helpers.arr" as H
 
 data ModuleBlock:
   | Module(constants :: List<Constant>, procedures :: List<ProcedureBlock>)
+sharing:
+  tostring(self) -> String:
+    cases(ModuleBlock) self:
+      | Module(constants, procedures) =>
+        constant-string = for map(constant from constants): 
+          constant.tostring() 
+        end.join("\n")
+        procedure-string = for map(procedure from procedures): 
+          procedure.tostring() 
+        end.join("\n")
+        constant-string + "\n" + procedure-string
+    end
+  end
 end
 
 
@@ -117,15 +130,6 @@ sharing:
     end
   end
 end
-
-
-CallConv = {
-    c : 0,
-    fast : 8,
-    cold : 9,
-    x86_stdcall : 64,
-    x86_fastcall : 65
-}
 
 data Attribute:
   | Zext
