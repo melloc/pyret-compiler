@@ -10,9 +10,35 @@ import "icmp.arr" as I
 import "fcmp.arr" as F
 import "../helpers.arr" as H
 
-data ProcedureBlock:
-  | Procedure(type :: K.TypeKind<K.is-FunctionType>, instructions :: List<Opcode>)
+data ModuleBlock:
+  | Module(constants :: List<Constant>, procedures :: List<ProcedureBlock>)
 end
+
+
+data ProcedureBlock:
+  | Procedure(name         :: String,
+              ret-type     :: K.TypeKind, 
+              params       :: List<K.TypeKindField>, 
+              instructions :: List<Instruction>)
+sharing:
+  tostring(self) -> String:
+    cases(ProcedureBlock) self:
+      | Procedure(name, type, params, instructions) =>
+        "define " + type.tostring() + " @" + name + "("
+          + (for map(param from params):
+              cases(K.TypeKindField) param:
+                | TypeField(param-name, kind) => kind.tostring() + " %" + param-name
+              end
+            end).join(", ")
+          + ") {\n"
+          + for fold(base from "", instruction from instructions):
+              base + instruction.tostring() + "\n"
+            end
+          + "}\n"
+    end
+  end
+end
+
 
 data CallingConvention:
   | CCC
@@ -40,28 +66,56 @@ end
 
 data Linkage:
   | External
-  | Available_externally
-  | Link_once
-  | Link_once_odr
-  | Link_once_odr_auto_hide
+  | AvailableExternally
+  | LinkOnce
+  | LinkOnceODR
+  | LinkOnceODRAutoHide
   | Weak
-  | Weak_odr
+  | WeakODR
   | Appending
   | Internal
   | Private
-  | Dllimport
-  | Dllexport
-  | External_weak
-  | Ghost
+  | DLLImport
+  | DLLExport
+  | ExternalWeak
   | Common
-  | Linker_private
-  | Linker_private_weak
+  | LinkerPrivate
+  | LinkerPrivateWeak
+sharing:
+  tostring(self) -> String:
+    cases(Linkage) self:
+      | External            => "external"
+      | AvailableExternally => "available_externally"
+      | LinkOnce            => "linkonce"
+      | LinkOnceODR         => "linkonce_odr"
+      | LinkOnceODRAutoHide => "linkonce_odr_auto_hide"
+      | Weak                => "weak"
+      | WeakODR             => "weak_odr"
+      | Appending           => "appending"
+      | Internal            => "internal"
+      | Private             => "private"
+      | DLLImport           => "dllimport"
+      | DLLExport           => "dllexport"
+      | ExternalWeak        => "extern_weak"
+      | Common              => "common"
+      | LinkerPrivate       => "linker_private"
+      | LinkerPrivateWeak   => "linker_private_weak"
+    end
+  end
 end
 
 data Visibility:
   | Default
   | Hidden
   | Protected
+sharing:
+  tostring(self) -> String:
+    cases(Visibility) self:
+      | Default   => "default"
+      | Hidden    => "hidden"
+      | Protected => "protected"
+    end
+  end
 end
 
 
@@ -140,9 +194,9 @@ data Instruction:
 sharing:
   tostring(self) -> String:
     cases(Instruction) self:
-      | Assign(name, op) => name + " := " + op.tostring() + "\n"
-      | NoAssign(op)     => op.tostring() + "\n"
-      | Label(name)      => name + ":\n"
+      | Assign(name, op) => name + " := " + op.tostring()
+      | NoAssign(op)     => op.tostring()
+      | Label(name)      => name + ":"
     end
   end
 end
@@ -238,7 +292,7 @@ data OpCode:
         op2 :: K.ValueKind)
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
+  | Load(typ :: K.TypeKind, ptr)
   | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
           value-typ   :: K.TypeKind,
           value       :: K.ValueKind,
@@ -308,17 +362,17 @@ sharing:
   tostring(self) -> String:
     cases(OpCode) self:
       | Invalid =>
-      | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>) =>
+      | Ret(typ, value) =>
         "ret " + typ.tostring()
           + cases(Option<K.ValueKind>) value:
               | none => ""
               | some(val) => " " + val.tostring()
             end
-      | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String) =>
+      | BrConditional(cond-id, consq-label, altern-label) =>
         "br i1 " + cond-id + ", label " + consq-label + ", label " + altern-label
       | BrUnconditional(dest-label :: String) =>
         "br " + dest-label
-      | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>) =>
+      | Switch(intty, value, default, branches) =>
         "switch " + intty.tostring() + " " + value.tostring() + ", label " + default 
           + cases(List) branches:
               | empty => ""
@@ -468,4 +522,52 @@ data ThreadLocalMode:
   | LocalDynamic
   | InitialExec
   | LocalExec
+sharing:
+  tostring(self) -> String:
+    cases(ThreadLocalMode) self:
+      | None           => ""
+      | GeneralDynamic => "generaldynamic"
+      | LocalDynamic   => "localdynamic"
+      | InitialExec    => "initialexec"
+      | LocalExec      => "localexec"
+    end
+  end
+end
+
+data GlobalMode:
+  | GlobalConstant(value :: K.ValueKind)
+  | GlobalVariable
+end
+
+data Global:
+  | GlobalDecl(var-name     :: String,
+               linkage      :: Linkage, 
+               visibility   :: Visibility, 
+               storage-class, 
+               thread-local :: ThreadLocalMode, 
+               mode         :: GlobalMode,
+               ty           :: K.TypeKind, 
+               section      :: Option<String>, 
+               align        :: Option<Number>)
+sharing:
+  tostring(self) -> String:
+    cases(Global) self:
+      | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local, 
+                   mode, ty, section, align) =>
+        "@" + var-name + " = " + linkage.tostring() + " " + storage-class.tostring()
+          + thread-local.tostring()
+          + cases(GlobalMode) mode:
+              | GlobalConstant(value) => "constant " + ty.tostring() + " " + value.tostring()
+              | GlobalVariable        => "global " + ty.tostring()
+            end
+          + cases(Option<String>) section:
+              | some(s) => ", section \"" + s + "\""
+              | none    => ""
+            end
+          + cases(Option<Number>) align:
+              | some(n) => ", align " + n.tostring()
+              | none    => ""
+            end
+    end
+  end
 end
