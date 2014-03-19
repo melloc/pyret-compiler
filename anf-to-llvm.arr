@@ -37,6 +37,14 @@ next-func-name = (fun():
   end
 end)()
 
+next-string-name = (fun():
+  var n = 0
+  fun() -> String:
+    n := n + 1
+    "@str.p" + n.tostring()
+  end
+end)()
+
 num-prefix = "@num.v"
 
 num-id-prefix = "%num.p"
@@ -64,12 +72,12 @@ var funcs = []
 data HLettable:
   | h-undefined with: 
     tosyn(self): "undefined" end
-  | h-alloca with: 
-    tosyn(self): "alloca()" end
+  | h-box with: 
+    tosyn(self): "box" end
   | h-id(id :: String) with:
     tosyn(self): self.id end # TODO something else? 
-  | h-lookup(id :: String) with: 
-    tosyn(self): "lookup " + self.id end
+  | h-unbox(id :: String) with: 
+    tosyn(self): "unbox " + self.id end
   | h-data(name :: String, closure :: Set<String>)
   | h-lam(f :: String, closure :: Set<String>) with:
     tosyn(self): self.f + "{" + self.closure.to-list().str-join(",") + "}" end
@@ -124,7 +132,7 @@ fun filter-lets(prog :: HExpr) -> HExpr:
   fun filter-lets-lettable(expr :: HLettable, subs :: List<Subst>) -> HLettable:
     cases (HLettable) expr:
       | h-id(id) => h-id(lookup-in-subst(id, subs))
-      | h-lookup(id) => h-lookup(id) # really? 
+      | h-unbox(id) => h-unbox(id) # really? 
       | h-data(name, closure) => # TODO not sure...
       | h-lam(f, closure) => 
           clnew = for map(s from set([]), c from closure.to-list()):
@@ -195,6 +203,7 @@ fun filter-lets(prog :: HExpr) -> HExpr:
           h-assign(bind, 
                    lookup-in-subst(val, subs), 
                    filter-lets-expr(body, subs))
+      | h-try(body, bind, _except) => # TODO
       | h-if(c, t, e) => 
           newcond = lookup-in-subst(c, subs, c.id)
           h-if(newcond, filter-lets-expr(t, subs), filter-lets-expr(e, subs))
@@ -246,6 +255,10 @@ data NamedFunc:
                closure :: Set<String>)
 end
 
+data NamedString:
+  | named-str(name :: String, val :: String)
+end
+
 
   # Another utility function. We may want to raise it out of this scope. 
 fun lookup-bind(id :: String, binds :: List<N.ABind>) -> N.ABind: 
@@ -255,8 +268,59 @@ fun lookup-bind(id :: String, binds :: List<N.ABind>) -> N.ABind:
   end
 end
 
-fun get-free-vars(expr :: HExpr) -> Set<String>:
-  # TODO 
+fun get-free-vars(ex :: HExpr, alrdy :: Set<String>) -> Set<String>:
+  fun check-merge(v :: String, already :: Set<String>) -> Set<String>:
+    if already.member(v): set([]) else: set([v]) end
+  end
+
+  fun gfv-expr(expr :: HExpr, already :: Set<String>) -> Set<String>:
+    cases (HExpr) expr: 
+      | h-ret(val) => check-merge(val)
+      | h-let(bind, val, body) => 
+          nalready = already.union(set([bind.id]))
+          gfv-lettable(val, already).union(gfv-expr(body, nalready))
+      | h-assign(bind, val, body) => 
+          gfv-lettable(val, already).union(gfv-expr(body, already))
+      | h-try(body, bind, _except) => 
+          nalready = already.union(set([bind.id]))
+          gfv-expr(body, already).union(gfv-expr(_except, nalready))
+      | h-if(c, t, e) => 
+          s = check-merge(c, already).union(gfv-expr(t, already))
+          s.union(gfv-expr(e, already))
+    end
+  end
+
+  fun gfv-fields(fields :: List<HField>, 
+                 already :: Set<String>) -> Set<String>:
+    for fold(s from set([]), f from fields):
+      s.union(check-merge(f.value, already))
+    end
+  end
+
+  fun gfv-lettable(lettable :: HLettable, 
+                   already :: Set<String>) -> Set<String>:
+    cases (HLettable) lettable: 
+      | h-id(id) => check-merge(id, already)
+      | h-unbox(id) => check-merge(id, already)
+      | h-data(name, closure) => closure
+      | h-lam(f, closure) => closure
+      | h-app(func, args) => 
+          for fold(s from check-merge(func, already), a from args):
+            s.union(check-merge(a, already))
+          end
+      | h-obj(fields) => gfv-fields(fields, already)
+      | h-update(super, fields) => 
+          check-merge(super, already).union(gfv-fields(fields, already))
+      | h-extend(super, fields) => 
+          check-merge(super, already).union(gfv-fields(fields, already))
+      | h-dot(obj, field) => check-merge(obj, already)
+      | h-colon(obj, field) => check-merge(obj, already)
+      | h-get-bang(obj, field) => check-merge(obj, already)
+      | else => set([])
+    end
+  end
+
+  gfv-expr(ex, alrdy)
 end
 
 fun let-lettable(bind :: N.ABind, 
@@ -265,10 +329,10 @@ fun let-lettable(bind :: N.ABind,
                  vs :: Set<String>, 
                  binds :: List<N.ABind>) -> HExpr:
 
-    # Declaring this function here, since it will be used multiple times
-    # Both lists must be the same length (this is not checked!).
-    # Also, depends on values of b and vs that it closes over, rather than
-    # trying to pass them as arguments. 
+  # Declaring this function here, since it will be used multiple times
+  # Both lists must be the same length (this is not checked!).
+  # Also, depends on values of b and vs that it closes over, rather than
+  # trying to pass them as arguments. 
   fun obj-fold(fields :: List<AField>, 
                done :: List<HField>,
                finish :: (List<HField> -> HLettable)) -> HExpr:
@@ -285,7 +349,22 @@ fun let-lettable(bind :: N.ABind,
     end
   end
 
-    # This is the main match statement of let-lettable. 
+  # this is like obj-fold, but for function calls. 
+  fun app-fold(args :: List<AVal>,
+               done :: List<String>,
+               finish :: (List<String> -> HLettable)) -> HExpr:
+    cases (List<String>) args:
+      | link(f, r) => 
+          tmp = next-val()
+          h-let(N.a-bind(tmp, A.a_blank),
+                aval-h(f, vs),
+                app-fold(r, link(tmp, done)))
+      | empty => 
+          h-let(bind, finish(done.reverse()), aexpr-h(b, vs, binds))
+    end
+  end
+
+  # This is the main match statement of let-lettable. 
   cases (N.ALettable) e: 
     | a-data-expr(l, name, variants, shared) =>
         # TODO lift things
@@ -340,32 +419,44 @@ fun let-lettable(bind :: N.ABind,
           end
         end
 
-        do-let-bindings(data-tmps.reverse(), data-vals.reverse(), b)
-
-        # TODO when filtering lets, we need to make sure that we look up 
-        # each data expression in the list, and traverse it if necessary. 
+        do-let-bindings(data-tmps.reverse(), data-vals.reverse(), b) 
     | a-assign(l, id, val) => 
         h-let(bind, 
               aval-h(val, vs), 
               h-assign(lookup-bind(id, binds), 
                        bind.id, 
                        aexpr-h(b, vs, binds)))
-    | a-app(l, f, args) => # TODO this is why we're doing it this way...
-    | a-help-app(l, f, args) => # TODO what is this?  
+    | a-app(l, f, args) => 
+        tmp = next-val()
+        h-let(N.a-bind(tmp, A.a_blank),
+              aval-h(f, vs),
+              app-fold(args, 
+                       empty,
+                       fun(arguments :: List<String>) -> HLettable:
+                         h-app(tmp, arguments)
+                       end))
+    | a-help-app(l, f, args) => 
+        raise("Congratulations! You've created an a-help-app!")
     | a-obj(l, fields) => 
         obj-fold(fields, empty, h-obj)
     | a-update(l, super, fields) => 
-        obj-fold(fields, 
-                 empty, 
-                 fun(flds :: List<HField>) -> HLettable:
-                   h-update(super, flds)
-                 end)
+        tmp = next-val()
+        h-let(N.a-bind(tmp, A.a_blank),
+              aval-h(super, vs),
+              obj-fold(fields, 
+                       empty, 
+                       fun(flds :: List<HField>) -> HLettable:
+                         h-update(tmp, flds)
+                       end))
     | a-extend(l, super, fields) => 
-        obj-fold(fields, 
-                 empty, 
-                 fun(flds :: List<HField>) -> HLettable:
-                   h-extend(super, flds)
-                 end)
+        tmp = next-val()
+        h-let(N.a-bind(tmp, A.a_blank),
+              aval-h(super, vs),
+              obj-fold(fields, 
+                       empty, 
+                       fun(flds :: List<HField>) -> HLettable:
+                         h-extend(tmp, flds)
+                       end))
     | a-dot(l, obj, field) => 
         tmp = next-val()
         h-let(N.a-bind(tmp, A.a_blank), 
@@ -406,7 +497,7 @@ fun aexpr-h(expr :: N.AExpr,
     | a-var(l, bind, e, body) =>
         tmp = next-val()
         h-let(bind, 
-              h-alloca,
+              h-box,
               aexpr-h(N.a-let(l, 
                               A.a-bind(tmp, A.a_blank), 
                               e, 
@@ -418,14 +509,10 @@ fun aexpr-h(expr :: N.AExpr,
                       binds))
         # TODO this last one is a bit complex, and may not work. 
         # It needs serious testing before we should trust it. 
-    | a-try(l, body, b, _except) => 
-        # TODO make sure this is correct. 
+    | a-try(l, body, b, _except) =>  
         h-try(aexpr-h(body, vs, binds), b, aexpr-h(_except, vs, binds))
     | a-split-app(l, is-var, f, args, helper, helper-args) => 
-        
-        # TODO
-
-
+        raise("Congratulations! You've generated an a-split-app!")
     | a-if(l, c, t, e) => 
         tmp = next-val()
         h-let(N.a-bind(tmp, A.a_blank), 
@@ -470,19 +557,13 @@ fun aval-h(val :: N.AVal, vars :: Set<String>) -> HLettable:
         nums := link(n, nums)
         h-id(num-id-prefix + n.tostring-fixed(num-len))
     | a-str(l, s) => 
-        strings := link(s, strings)
-        # TODO figure out how to represent string as ID
-        str-name = ""
+        str-name = next-string-name()
+        strings := link(named-str(str-name, s), strings)
         h-id(str-name)
     | a-bool(l, b) => 
-        #bools := link(b, bools)
-        # TODO let's just always initialize true and false, okay?
         if b: h-id(bool-id-true) else: h-id(bool-id-false) end
     | a-undefined(l) => h-undefined
-    | a-id(l, id) => if vars.member(id): h-lookup(id) else: h-id(id) end
-        # TODO figure out what to do here. We probably want to get the 
-        # set of free variables in a function using a different, recursive
-        # function, which will be defined later. 
+    | a-id(l, id) => if vars.member(id): h-unbox(id) else: h-id(id) end 
     | a-id-var(l, id) =>
         raise("ERROR - a-id-var should have been removed by now")
     | a-id-letrec(l, id) => 
@@ -490,58 +571,17 @@ fun aval-h(val :: N.AVal, vars :: Set<String>) -> HLettable:
   end
 end
 
-  # TODO we need a new filter-lets function. When it hits a function 
-  # declaration, it will either (A) go find that function in the list
-  # of functions to lift, and filter its body, or (B) store the current
-  # set of substitutions in a list with the function's name as a key, 
-  # and then we will continue the substituting later. I think the former
-  # will be more straightforward to implement; I just don't want to do
-  # something that will overwhelm memory if the program is large.  
-  # I will need to remember to also substitute in closure sets, both in
-  # the h-lam objects, and in the named-function objects. 
 
-
-
-  # This is the very end
-  # Be sure to set the ID program-insides to the value of the program!
-
-  # TODO wrap this object creation in a function. That function, and only
-  # that function, will be exported to the other files. 
-#  {nums : set(nums), 
-#   string : set(strings),  
-#   datas : set(datas), 
-#   funcs : set(funcs),
-#   expr : program-insides}
+# TODO wrap this object creation in a function. That function, and only
+# that function, will be exported to the other files. 
+#  {"nums" : set(nums), 
+#   "string" : set(strings),  
+#   "datas" : set(datas), 
+#   "funcs" : set(funcs),
+#   "expr" : program-insides}
 
 
 # TODO the above object should be created and returned by the aprog-h function.
-
-
-
-
-# Convert Variant
-#fun avariant-h(variant :: N.AVariant) -> HVariant:
-#  cases (N.AVariant) variant: 
-#    | a-variant(l, name, members, with-members) => 
-#        h-variant(name, 
-#                  for map(m from members): avariantmember-h(m) end,
-#                  for map(w from with-members): afield-h(w) end)
-#    | a-singleton-variant(l, name, with-members) => 
-#        h-singleton-variant(name, 
-#                            for map(w from with-members): afield-h(w) end)
-#  end
-#end
-
-# Convert Variant Member
-#fun avariantmember-h(member :: AVariantMember) -> HVariantMember:
-#  h-variant-member(member.member-type, 
-#                   h-bind(member.bind.id, member.bind.ann))
-#end
-
-# Convert Field
-#fun afield-h(field :: N.AField) -> HField:
-#  h-field(field.name, field.value)
-#end
 
 
 
@@ -553,22 +593,7 @@ end
 # lines of code. 
 fun aprog-h(prog :: N.AProg):  
   cases (N.AProg) prog: 
-    | a-program(l, imports, body) => 
-        # TODO we also need to lift data declarations
-    #    datas = lift-datas(body)
-
-        # TODO handle compiling headers
-     #   hexpr = aexpr-h(remove-datas(body))
-    #    nums = lift-nums(hexpr)
-   #     strings = lift-strings(hexpr)
-  #      bools = lift-bools(hexpr)
-##        rexpr = replace-literals(hexpr)
-
-        # TODO be sure to call all transformational functions
-
-        # TODO also be sure to handle all headers
-        #h-prog(rexpr, nums)
-        # TODO h-prog(hexpr, nums, strings, bools, funcs, datas, headers)
+    | a-program(l, imports, body) => # TODO
   end
 end
 
