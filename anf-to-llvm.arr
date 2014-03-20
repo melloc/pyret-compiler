@@ -52,7 +52,7 @@ string-id-prefix = "%str.p"
 bool-id-true = "%bool.p-true"
 bool-id-false = "%bool.p-false"
 
-closure-id = "%closure.p"
+closure-arg-id = "%closure.p"
 
 num-len = 10
 
@@ -80,8 +80,7 @@ data HLettable:
     tosyn(self): self.id end # TODO something else? 
   | h-unbox(id :: String) with: 
     tosyn(self): "unbox " + self.id end
-  | h-lam(f :: String, closure :: Set<String>) with:
-    tosyn(self): self.f + "{" + self.closure.to-list().str-join(",") + "}" end
+  | h-lam(f :: String, closure :: String) with:
   | h-app(f :: String, args :: List<String>) with:
     tosyn(self): self.f + "(" + self.args.str-join(",") + ")" end
   | h-obj(fields :: List<HField>)
@@ -303,7 +302,7 @@ fun get-free-vars(ex :: HExpr, alrdy :: Set<String>) -> Set<String>:
     cases (HLettable) lettable: 
       | h-id(id) => check-merge(id, already)
       | h-unbox(id) => check-merge(id, already)
-      | h-lam(f, closure) => closure
+      | h-lam(f, closure) => check-merge(closure, already) # TODO do we need this? 
       | h-app(func, args) => 
           for fold(s from check-merge(func, already), a from args):
             s.union(check-merge(a, already))
@@ -415,8 +414,8 @@ fun let-lettable(bind :: N.ABind,
                                   do-let-bindings(r, dvals.rest, body))
             | empty => aexpr-h(body, vs, binds)
                 # h-let(bind, 
-                    h-data(name, set(data-tmps)), 
-                    aexpr-h(body, vs, binds))
+                #    h-data(name, set(data-tmps)), 
+                 #   aexpr-h(body, vs, binds))
           end
         end
 
@@ -427,7 +426,10 @@ fun let-lettable(bind :: N.ABind,
               h-assign(lookup-bind(id, binds), 
                        bind.id, 
                        aexpr-h(b, vs, binds)))
-    | a-app(l, f, args) => 
+    | a-app(l, f, args) =>
+        # TODO do I need to add the other argument here as well? 
+        # It might be better to do so, and just pass a function as an object,
+        # and look up the function from a field. 
         tmp = next-val()
         h-let(N.a-bind(tmp, A.a_blank),
               aval-h(f, vs),
@@ -476,22 +478,26 @@ fun let-lettable(bind :: N.ABind,
     | a-lam(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
+		fvars = get-free-vars(fbody).to-list()
         # TODO we also need to change the body to bind everything that was
         # inside of that closure. It would probably be a good idea to just 
         # assume that it is the same as an object. Do for methods to.
         funcs := link(
           named-func(name, 
-                     [closure-id] + args, 
+                     [closure--arg-id] + args, 
                      ret, 
-                     for fold(base from fbody,
-                              vid from get-free-vars(fbody).to-list()):
+                     for fold(base from fbody, vid from fvars):
                        h-let(N.a-bind(vid, A.a_blank),
-                             h-dot(closure-id, N.a-bind(vid, A.a_blank)),
+                             h-dot(closure-arg-id, N.a-bind(vid, A.a_blank)),
                              base)
                      end),
           funcs
         )
-        h-let(bind, h-lam(name), aexpr-h(b, vs, binds))
+
+		tmp = next-val()
+		h-let(N.a-bind(tmp, A.a_blank),
+              h-obj(for map(vid from fvars): h-field(vid, vid) end),
+			  h-let(bind, h-lam(name, tmp), aexpr-h(b, vs, binds)))
     | a-method(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
