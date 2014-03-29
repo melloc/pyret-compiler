@@ -53,6 +53,8 @@ bool-id-true = "%bool.p-true"
 bool-id-false = "%bool.p-false"
 
 closure-arg-id = "%closure.p"
+closure-field-id = "closure.f"
+funcptr-field-id = "funcptr.f"
 
 num-len = 10
 
@@ -80,7 +82,7 @@ data HLettable:
     tosyn(self): self.id end # TODO something else? 
   | h-unbox(id :: String) with: 
     tosyn(self): "unbox " + self.id end
-  | h-lam(f :: String, closure :: String) with:
+  | h-lam(f :: String, closure :: String)
   | h-app(f :: String, args :: List<String>) with:
     tosyn(self): self.f + "(" + self.args.str-join(",") + ")" end
   | h-obj(fields :: List<HField>)
@@ -132,7 +134,8 @@ fun filter-lets(prog :: HExpr) -> HExpr:
     h-field(field.name, lookup-in-subst(field.value, subs))
   end
 
-  fun filter-lets-lettable(expr :: HLettable, subs :: List<Subst>) -> HLettable:
+  fun filter-lets-lettable(expr :: HLettable, 
+                           subs :: List<Subst>) -> HLettable:
     cases (HLettable) expr:
       | h-id(id) => h-id(lookup-in-subst(id, subs))
       | h-box(id) => h-box(lookup-in-subst(id, subs))
@@ -184,20 +187,34 @@ fun filter-lets(prog :: HExpr) -> HExpr:
     end
   end
 
-  fun filter-lets-expr(expr :: HExpr, subs :: List<Subst>) -> HExpr:
+  fun filter-lets-expr(expr :: HExpr, 
+                       subs :: List<Subst>,
+                       scope :: String) -> HExpr:
     cases (HExpr) expr: 
       | h-ret(val) => h-ret(lookup-in-subst(val, subs))
       | h-let(bind, val, body) =>
+          # TODO update this branch
           nval = filter-lets-lettable(val, subs)
           cases (HLettable) nval:
             | h-id(id) => 
                 if (bind.ann == A.a_any) or (bind.ann == A.a_blank):
-                  filter-lets-expr(body, link(let-sub(bind.id, id), subs))
-                else: 
-                  h-let(bind, nval, filter-lets-expr(body, subs))
+                  filter-lets-expr(body, 
+                                   link(let-sub(bind.id, id), 
+                                        subs), 
+                                   scope)
+                else:
+                  new-id = scope + bind.id
+                  new-bind = A.a-bind(new-id, bind.ann) # TODO right?
+                  h-let(new-bind, 
+                        nval, 
+                        filter-lets-expr(body, 
+                                         link(let-sub(bind.id, new-id), 
+                                              subs), 
+                                         scope))
+                        # TODO check all of this twice. 
                 end
             | else => 
-                h-let(bind, nval, filter-lets-expr(body, subs))
+                h-let(bind, nval, filter-lets-expr(body, subs, scope))
           end
           # if the let includes an actual type check (not any or blank),
           # we will leave it in, since that will be valid LLVM (probably 
@@ -207,15 +224,26 @@ fun filter-lets(prog :: HExpr) -> HExpr:
           # of an assign expression. 
           h-assign(bind, 
                    lookup-in-subst(val, subs), 
-                   filter-lets-expr(body, subs))
-      | h-try(body, bind, _except) => # TODO
+                   filter-lets-expr(body, subs, scope))
+      | h-try(body, bind, _except) => 
+          # TODO I think we do need to replace "bind".
+          new-id = scope + bind.id
+          new-bind = A.a-bind(new-id, bind.ann)
+          h-try(filter-lets-expr(body, subs, next-scope()),
+                new-bind,
+                filter-lets-expr(_except, 
+                                 link(let-sub(bind.id, new-id),
+                                      subs), 
+                                 next-scope()))
       | h-if(c, t, e) => 
-          newcond = lookup-in-subst(c, subs, c.id)
-          h-if(newcond, filter-lets-expr(t, subs), filter-lets-expr(e, subs))
+          newcond = lookup-in-subst(c, subs)
+          h-if(newcond, 
+               filter-lets-expr(t, subs, next-scope()), 
+               filter-lets-expr(e, subs, next-scope()))
     end
   end
 
-  filter-lets-expr(prog, empty)
+  filter-lets-expr(prog, empty, next-scope())
 where:
   filter-lets(h-ret("tmp")) is h-ret("tmp")
   filter-lets(
@@ -371,8 +399,6 @@ fun let-lettable(bind :: N.ABind,
   # This is the main match statement of let-lettable. 
   cases (N.ALettable) e: 
     | a-data-expr(l, name, variants, shared) =>
-        # TODO lift things
-
         # variables to close over
         var data-tmps = []
         var data-vals = []
@@ -535,7 +561,7 @@ fun aexpr-h(expr :: N.AExpr,
     | a-let(l, bind, e, body) => let-lettable(bind, e, body, vs, binds)
     | a-var(l, bind, e, body) =>
         tmp = next-val()
-        if is-a-val(e):
+        if N.is-a-val(e):
           h-let(N.a-bind(tmp, A.a_blank),
                 aval-h(e.val, vs),
                 h-let(bind, 
@@ -635,11 +661,11 @@ fun aprog-h(prog :: N.AProg):
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))
-        {"nums" : nums,
-         "strings" : strings,
-         "datas" : datas,
-         "funcs" : funcs,
-         "expr" : fbody}
+        {nums : nums,
+         strings : strings,
+         datas : datas,
+         funcs : funcs,
+         expr : fbody}
   end
 end
 
