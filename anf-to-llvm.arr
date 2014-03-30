@@ -148,6 +148,9 @@ fun filter-lets(prog :: HExpr) -> HExpr:
       #      s.union(set([lookup-in-subst(c, subs)]))
       #    end
 
+          # TODO March 29 also, if we haven't already, we need to make sure
+          # that we are doing the scoping changes in functions as well. 
+
           fun handle-func-vs(fs :: List<NamedFunc>) -> List<NamedFunc>:
             cases (List<NamedFunc>) fs:
               | link(first, rest) => 
