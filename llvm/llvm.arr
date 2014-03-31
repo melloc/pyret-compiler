@@ -18,10 +18,10 @@ sharing:
       | Module(constants, procedures) =>
         constant-string = for map(constant from constants):
           constant.tostring()
-        end.join("\n")
+        end.join-str("\n")
         procedure-string = for map(procedure from procedures):
           procedure.tostring()
-        end.join("\n")
+        end.join-str("\n")
         constant-string + "\n" + procedure-string
     end
   end

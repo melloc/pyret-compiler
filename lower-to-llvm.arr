@@ -116,7 +116,7 @@ fun l-expr-to-llvm(e :: AL.Expression, adts :: List<AL.ADT>) -> List<L.Instructi
   end
 end
 
-fun low-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
+fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
   cases(AL.Program) prog:
     | l-prog(constants, procedures, adts) =>
       L.Module(constants, for map(proc from procedures):

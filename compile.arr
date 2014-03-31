@@ -5,9 +5,12 @@ import format as fmt
 import ast as A
 import namespaces as N
 
+# Different steps of compiler
 import "anf.arr" as anf
-import "ast-anf.arr" as anf-ast
-import "anf-to-llvm.arr" as llvm
+import "anf-to-h.arr" as h
+import "h-to-lower.arr" as lower
+import "lower-to-llvm.arr" as llvm
+
 import "helpers.arr" as H
 
 fun main(argc :: Number, argv :: List<String>) -> Number:
@@ -19,9 +22,11 @@ fun main(argc :: Number, argv :: List<String>) -> Number:
         output-filename = argv.rest.first
         prog-txt = H.get-file-text(input-filename)
         parsed = A.parse(prog-txt, input-filename, { check : false, env : N.pyret-env })
-        anfed = anf.anf-program(parsed.pre-desugar)
-        ir  = llvm.aprog-llvm(anfed)
-        H.put-file-text(output-filename, ir.tostring())
+        anf-rep   = anf.anf-program(parsed.pre-desugar)
+        h-rep     = h.anf-to-h(anf-rep)
+        lower-rep = lower.h-to-lower(h-rep)
+        llvm-rep  = llvm.lower-to-llvm(lower-rep)
+        H.put-file-text(output-filename, llvm-rep.tostring())
         0
     end
 end
