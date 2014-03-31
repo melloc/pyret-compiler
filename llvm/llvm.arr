@@ -16,11 +16,11 @@ sharing:
   tostring(self) -> String:
     cases(ModuleBlock) self:
       | Module(constants, procedures) =>
-        constant-string = for map(constant from constants): 
-          constant.tostring() 
+        constant-string = for map(constant from constants):
+          constant.tostring()
         end.join("\n")
-        procedure-string = for map(procedure from procedures): 
-          procedure.tostring() 
+        procedure-string = for map(procedure from procedures):
+          procedure.tostring()
         end.join("\n")
         constant-string + "\n" + procedure-string
     end
@@ -30,8 +30,8 @@ end
 
 data ProcedureBlock:
   | Procedure(name         :: String,
-              ret-type     :: K.TypeKind, 
-              params       :: List<K.TypeKindField>, 
+              ret-type     :: K.TypeKind,
+              params       :: List<K.TypeKindField>,
               instructions :: List<Instruction>)
 sharing:
   tostring(self) -> String:
@@ -131,54 +131,83 @@ sharing:
   end
 end
 
-data Attribute:
-  | Zext
-  | Sext
-  | InReg
-  | Structret
-  | NoAlias
-  | Byval
-  | Nest
+data FunctionAttribute:
   | NoInline
+  | NoReturn
+  | NoUnwind
   | AlwaysInline
-  | Optsize
-  | Ssp
-  | SspReq
+  | OptSize
+  | SanitizeAddress
+  | SanitizeMemory
+  | SanitizeThread
+  | SSP
+  | SSPReq
+  | SSPStrong
   | Alignment(n :: Number)
-  | Nocapture
-  | Noredzone
+  | NoRedzone
   | NoImplicitFloat
   | Naked
-  | Inlinehint
-  | Stackalignment(n :: Number)
+  | InlineHint
+  | StackAlignment(n :: Number)
+  | ReadOnly
+  | ReadNone
   | ReturnsTwice
   | UWTable
   | NonLazyBind
 sharing:
   tostring(self):
-    cases(Attribute) self:
-      | Zext =>
-      | Sext =>
-      | InReg =>
-      | Structret =>
-      | NoAlias =>
-      | Byval =>
-      | Nest =>
-      | NoInline =>
-      | AlwaysInline =>
-      | Optsize =>
-      | Ssp =>
-      | SspReq =>
-      | Alignment(n) =>
-      | NoCapture =>
-      | NoRedzone =>
-      | NoImplicitFloat =>
-      | Naked =>
-      | Inlinehint =>
-      | StackAlignment(n) =>
-      | ReturnsTwice =>
-      | UWTable =>
-      | NonLazyBind =>
+    cases(FunctionAttribute) self:
+      | Alignment(n)      => "align(" + n.tostring() + ")"
+      | AlwaysInline      => "alwaysinline"
+      | InlineHint        => "inlinehint"
+      | NoInline          => "noinline"
+      | Naked             => "naked"
+      | NoImplicitFloat   => "noimplicitfloat"
+      | NonLazyBind       => "nonlazybind"
+      | NoRedzone         => "noredzone"
+      | NoReturn          => "noreturn"
+      | NoUnwind          => "nounwind"
+      | OptSize           => "optsize"
+      | ReadOnly          => "readonly"
+      | ReadNone          => "readnone"
+      | SanitizeAddress   => "sanitize_address"
+      | SanitizeMemory    => "sanitize_memory"
+      | SanitizeThread    => "sanitize_thread"
+      | SSP               => "ssp"
+      | SSPReq            => "sspreq"
+      | SSPStrong         => "sspstrong"
+      | StackAlignment(n) => "alignstack(" + n.tostring() + ")"
+      | ReturnsTwice      => "returns_twice"
+      | UWTable           => "uwtable"
+    end
+  end
+end
+
+
+data ParameterAttribute:
+  | ByVal
+  | InAlloca
+  | InReg
+  | Nest
+  | NoAlias
+  | NoCapture
+  | Returned
+  | SignExt
+  | StructRet
+  | ZeroExt
+sharing:
+  tostring(self):
+    cases(ParameterAttribute) self:
+      | ByVal             => "byval"
+      | InAlloca          => "inalloca"
+      | InReg             => "inreg"
+      | Nest              => "nest"
+      | NoAlias           => "noalias"
+      | NoCapture         => "nocapture"
+      | Returned          => "returned"
+      | SignExt           => "signext"
+      | StructRet         => "sret"
+      | ZeroExt           => "zeroext"
     end
   end
 end
@@ -207,22 +236,6 @@ end
 
 data SwitchBranch:
   | switch-branch(intty :: K.TypeKind, value, label :: String)
-end
-
-data FunctionAttribute:
-  | NoReturn
-  | NoUnwind
-  | ReadOnly
-  | ReadNone
-sharing:
-  tostring(self):
-    cases(FunctionAttribute) self:
-      | NoReturn => "noreturn"
-      | NoUnwind => "nounwind"
-      | ReadOnly => "readonly"
-      | ReadNone => "readnone"
-    end
-  end
 end
 
 data OpCode:
@@ -377,12 +390,12 @@ sharing:
       | BrUnconditional(dest-label :: String) =>
         "br " + dest-label
       | Switch(intty, value, default, branches) =>
-        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default 
+        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default
           + cases(List) branches:
               | empty => ""
-              | link(_, _) => 
-                for fold(base from " [ ", current from branches): 
-                  base + current.tostring() 
+              | link(_, _) =>
+                for fold(base from " [ ", current from branches):
+                  base + current.tostring()
                 end + " ] "
             end
       | IndirectBr =>
@@ -391,21 +404,21 @@ sharing:
       | Unreachable =>
         "unreachable"
       | Add(nuw, nsw, typ, op1, op2) =>
-        "add " 
+        "add "
           + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FAdd =>
       | Sub(nuw, nsw, typ, op1, op2) =>
-        "sub " 
+        "sub "
           + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FSub =>
       | Mul(nuw, nsw, typ, op1, op2) =>
-        "mul " 
+        "mul "
           + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
@@ -424,7 +437,7 @@ sharing:
         "srem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
       | FRem =>
       | Shl(nuw, nsw, typ, op1, op2) =>
-        "shl " 
+        "shl "
           + if nuw: "nuw " else: "" end
           + if nsw: "nsw " else: "" end
           + typ.tostring() + " "
@@ -545,18 +558,18 @@ end
 
 data Global:
   | GlobalDecl(var-name     :: String,
-               linkage      :: Linkage, 
-               visibility   :: Visibility, 
-               storage-class, 
-               thread-local :: ThreadLocalMode, 
+               linkage      :: Linkage,
+               visibility   :: Visibility,
+               storage-class,
+               thread-local :: ThreadLocalMode,
                mode         :: GlobalMode,
-               ty           :: K.TypeKind, 
-               section      :: Option<String>, 
+               ty           :: K.TypeKind,
+               section      :: Option<String>,
                align        :: Option<Number>)
 sharing:
   tostring(self) -> String:
     cases(Global) self:
-      | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local, 
+      | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local,
                    mode, ty, section, align) =>
         "@" + var-name + " = " + linkage.tostring() + " " + storage-class.tostring()
           + thread-local.tostring()
