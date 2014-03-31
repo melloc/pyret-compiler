@@ -11,20 +11,20 @@ data Int:
 end
 
 data AccessPath: 
-  | OffP(i :: Int)
-  | SelP(i :: Int, a :: AccessPath)
+  | OffP(i :: Number)
+  | SelP(i :: Number, a :: AccessPath)
 end
 
 data VariantMember: 
-  | l-variant-member(name :: String, type :: ConRep)
+  | l-variant-member(name :: String)
 end
 
 data Variant:
-  | l-variant(name :: String, tag :: Int, fields :: List<VariantMember>)
+  | l-variant(name :: String, tag :: ConRep, fields :: List<VariantMember>)
 end
 
 data ADT:
-  | l-adt(variants :: Variant)
+  | l-adt(variants :: Variant, width :: Number)
 sharing:
   lookup-variant(self, needle-name):
     cases(ADT) self:
@@ -50,8 +50,8 @@ end
 
 data ConRep:
   | Undecided
-  | Tagged(variant :: Int)
-  | Constant(variant :: Int)
+  | Tagged(variant :: Number)
+  | Constant(variant :: Number)
   | Transparent
   | TransU
   | TransB
@@ -59,17 +59,17 @@ data ConRep:
   | Variable(id :: String, ap :: AccessPath)
   | VariableC(id :: String, ap :: AccessPath)
 sharing:
-  toint(self) -> Int:
+  toint(self) -> Number:
     cases(ConRep) self:
-      | Undecided                 => raise("This ConRep not implemented yet")
-      | Tagged(variant :: Int)    => variant
-      | Constant(variant :: Int)  => variant
-      | Transparent               => raise("This ConRep not implemented yet")
-      | TransU                    => raise("This ConRep not implemented yet")
-      | TransB                    => raise("This ConRep not implemented yet")
-      | Ref                       => raise("This ConRep not implemented yet")
-      | Variable(_, _)            => raise("This ConRep not implemented yet")
-      | VariableC(_, _)           => raise("This ConRep not implemented yet")
+      | Undecided         => raise("This ConRep not implemented yet")
+      | Tagged(variant)   => variant
+      | Constant(variant) => variant
+      | Transparent       => raise("This ConRep not implemented yet")
+      | TransU            => raise("This ConRep not implemented yet")
+      | TransB            => raise("This ConRep not implemented yet")
+      | Ref               => raise("This ConRep not implemented yet")
+      | Variable(_, _)    => raise("This ConRep not implemented yet")
+      | VariableC(_, _)   => raise("This ConRep not implemented yet")
     end
   end,
   totype(self) -> K.TypeKind:
@@ -102,8 +102,13 @@ data Procedure:
 end
 
 data Lettable:
+  | l-undefined
   | l-application(f :: String, args :: List<String>)
   | l-select(field :: Number, id :: String, rep :: ConRep)
+  | l-update(table :: String, field-name :: String, value :: String)
+  | l-lookup(table :: String, field-name :: String)
+  | l-copy(table :: String)
+  | l-id(id :: String)
 end
 
 data Branch:
@@ -112,7 +117,8 @@ end
 
 data Expression:
   | l-switch(value :: String, branches :: List<Branch>, default :: Option<Expression>)
-  | l-let(binding :: AN.ABind, e :: Lettable, body :: Expression)
+  | l-let(binding :: String, e :: Lettable, body :: Expression)
+  | l-seq(e :: Lettable, body :: Expression)
   | l-assign(binding :: String, e :: Lettable)
   | l-if(cond :: String, consq :: Expression, altern :: Expression)
 end
