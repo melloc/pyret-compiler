@@ -2,7 +2,7 @@
 
 provide *
 
-import "anf-to-llvm.arr" as AH
+import "ast-h.arr" as AH
 import "ast-anf.arr"     as AN
 import "ast-lower.arr"   as AL
 import "helpers.arr"     as H
@@ -103,7 +103,7 @@ fun h-to-lower(prog) -> AL.Program:
     h-adt-to-lower(adt)
   end
   constants = [] # TODO: Constants should be numbers and strings
-  procs = for map(func from prog.func):
+  procs = for map(func from prog.funcs):
     h-proc-to-lower(func, adts)
   end
   AL.l-prog(constants, procs, adts)
