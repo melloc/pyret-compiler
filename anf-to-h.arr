@@ -239,7 +239,7 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
 
   fun gfv-expr(expr :: AH.HExpr, already :: Set<String>) -> Set<String>:
     cases (AH.HExpr) expr: 
-      | h-ret(val) => check-merge(val)
+      | h-ret(val) => check-merge(val, already)
       | h-let(bind, val, body) => 
           nalready = already.union(set([bind.id]))
           gfv-lettable(val, already).union(gfv-expr(body, nalready))
@@ -444,7 +444,10 @@ fun let-lettable(bind :: AH.Bind,
     | a-lam(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
-		fvars = get-free-vars(fbody).to-list()
+		fvars = get-free-vars(fbody, 
+                              set(for map(a from args):
+                                    a.id
+                                  end)).to-list()
         funcs := link(
           AH.named-func(name, 
                      [closure-arg-id] + args, 
