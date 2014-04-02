@@ -123,7 +123,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
                   if first.name == f:
                     link(AH.named-func(first.name,
                                     first.args,
-                                    filter-lets-expr(first.body, subs),
+                                    filter-lets-expr(first.body, subs, first.name),
                                     first.ret), 
                          rest)
                   else:
@@ -225,8 +225,8 @@ end
 
 
   # Another utility function. We may want to raise it out of this scope. 
-fun lookup-bind(id :: String, binds :: List<N.ABind>) -> N.ABind: 
-  cases (List<N.ABind>) binds: 
+fun lookup-bind(id :: String, binds :: List<AH.Bind>) -> AH.Bind: 
+  cases (List<AH.Bind>) binds: 
     | link(f, r) => if f.id == id: f else: lookup-bind(id, r) end
     | empty => raise("ID \"" + id + "\" is not bound.")
   end
@@ -244,7 +244,9 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
           nalready = already.union(set([bind.id]))
           gfv-lettable(val, already).union(gfv-expr(body, nalready))
       | h-assign(bind, val, body) => 
-          gfv-lettable(val, already).union(gfv-expr(body, already))
+        a = check-merge(bind.id, already)  
+        b = check-merge(val, already)  
+        gfv-expr(body, already).union(a).union(b)
       | h-try(body, bind, _except) => 
           nalready = already.union(set([bind.id]))
           gfv-expr(body, already).union(gfv-expr(_except, nalready))
@@ -291,7 +293,7 @@ fun let-lettable(bind :: AH.Bind,
                  e :: N.ALettable, 
                  b :: N.AExpr,
                  vs :: Set<String>, 
-                 binds :: List<N.ABind>) -> AH.HExpr:
+                 binds :: List<AH.Bind>) -> AH.HExpr:
 
   # Declaring this function here, since it will be used multiple times
   # Both lists must be the same length (this is not checked!).
@@ -451,12 +453,11 @@ fun let-lettable(bind :: AH.Bind,
         funcs := link(
           AH.named-func(name, 
                      [closure-arg-id] + args, 
-                     ret, 
                      for fold(base from fbody, vid from fvars):
                        AH.h-let(AH.h-bind(vid, A.a_blank),
                              AH.h-dot(closure-arg-id, AH.h-bind(vid, A.a_blank)),
                              base)
-                     end),
+                     end, ret),
           funcs
         )
 
@@ -494,21 +495,27 @@ end
 
 fun aexpr-h(expr :: N.AExpr, 
             vs :: Set<String>, 
-            binds :: List<N.ABind>) -> AH.HExpr:
+            binds :: List<AH.Bind>) -> AH.HExpr:
   cases (N.AExpr) expr: 
-    | a-let(l, bind, e, body) => let-lettable(to-hbind(bind), e, body, vs, binds)
+    | a-let(l, bind, e, body) => 
+      new-bind  = to-hbind(bind)
+      new-binds = link(new-bind, binds)
+      let-lettable(new-bind, e, body, vs, new-binds)
     | a-var(l, bind, e, body) =>
         tmp = next-val()
+        tmp-bind = AH.h-bind(tmp, A.a_blank)
+        new-bind = to-hbind(bind)
+        new-binds = link(new-bind, link(tmp-bind, binds))
         if N.is-a-val(e):
-          AH.h-let(AH.h-bind(tmp, A.a_blank),
+          AH.h-let(tmp-bind,
                 aval-h(e.v, vs),
-                AH.h-let(bind, 
+                AH.h-let(new-bind, 
                       AH.h-box(tmp),
-                      aexpr-h(body, vs, binds)))
+                      aexpr-h(body, vs, new-binds)))
         else:
-          let-lettable(AH.h-bind(tmp, A.a_blank),
+          let-lettable(tmp-bind,
                        e,
-                       N.a-var(l, bind, N.a-val(N.a-id(tmp)), body), binds)
+                       N.a-var(l, bind, N.a-val(N.a-id(tmp)), body), new-binds)
         end
     | a-try(l, body, b, _except) =>  
         AH.h-try(aexpr-h(body, vs, binds), b, aexpr-h(_except, vs, binds))

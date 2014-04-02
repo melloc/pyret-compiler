@@ -225,10 +225,14 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
     | s_block(l, stmts) => anf-block(stmts, k)
     | s_user_block(l, body) => anf(body, k)
 
+    | s_fun(l, name, params, args, ret, doc, body, check) =>
+      a-fun = N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body))
+      N.a-let(l, N.a-bind(l, name, A.a_blank), a-fun,
+                k(N.a-val(N.a-id(l, name))))
     | s_lam(l, params, args, ret, doc, body, _) =>
-      k(N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), anf-term(body)))
+      k(N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body)))
     | s_method(l, args, ret, doc, body, _) =>
-      k(N.a-method(l, args.map(fun(b): bind(b.l, b.id) end), anf-term(body)))
+      k(N.a-method(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body)))
 
     | s_app(l, f, args) =>
       anf-name(f, "anf_fun", fun(v):
