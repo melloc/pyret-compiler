@@ -1,3 +1,4 @@
 #lang pyret
 
-4 / 3
+print(4 / 3)
+print("Should print 4/3")

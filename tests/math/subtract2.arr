@@ -1,4 +1,5 @@
 #lang pyret
 
 x = 7 - 5
-x
+print(x)
+print("Should print 2")

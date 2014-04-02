@@ -1,3 +1,4 @@
 #lang pyret
 
-8 - 7
+print(8 - 7)
+print("Should print 1")

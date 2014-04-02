@@ -2,4 +2,5 @@
 
 x = 7
 y = 8
-y
+print(y)
+print("Should print 8")

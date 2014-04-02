@@ -467,7 +467,10 @@ fun let-lettable(bind :: AH.Bind,
     | a-method(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
-		fvars = get-free-vars(fbody).to-list()
+		fvars = get-free-vars(fbody,
+                              set(for map(a from args):
+                                a.id
+                              end)).to-list()
         funcs := link(
           AH.named-func(name, 
                      [closure-arg-id] + args, 
@@ -507,22 +510,6 @@ fun aexpr-h(expr :: N.AExpr,
                        e,
                        N.a-var(l, bind, N.a-val(N.a-id(tmp)), body), binds)
         end
-
-
- #       tmp = next-val()
- #       h-let(bind, 
- #             h-box,
- #             aexpr-h(N.a-let(l, 
- #                             AH.h-bind(tmp, A.a_blank), 
- #                             e, 
- #                             N.a-let(l,
- #                                     AH.h-bind(next-val(), A.a_blank), 
- #                                     N.a-assign(l, bind, N.a-id(tmp)), 
- #                                     body)),
- #                     vs.union(set([bind.id])),
- #                     binds))
-        # TODO this last one is a bit complex, and may not work. 
-        # It needs serious testing before we should trust it. 
     | a-try(l, body, b, _except) =>  
         AH.h-try(aexpr-h(body, vs, binds), b, aexpr-h(_except, vs, binds))
     | a-split-app(l, is-var, f, args, helper, helper-args) => 
