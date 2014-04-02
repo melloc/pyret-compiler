@@ -125,10 +125,10 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
             arguments = for map(arg from args): 
               cases(AN.ABind) arg:
                 | a-bind(_, id, ann) => 
-                  K.TypeField(id, ann-to-type(ann))
+                  L.Parameter(id, ann-to-type(ann), [])
               end
             end
-            L.Procedure(name, ann-to-type(ret), arguments, l-expr-to-llvm(body, adts))
+            L.Procedure(name, ann-to-type(ret), arguments, [], l-expr-to-llvm(body, adts))
         end
       end)
   end

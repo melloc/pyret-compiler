@@ -27,26 +27,38 @@ sharing:
   end
 end
 
+data ParameterEntry:
+  | Parameter(param-name :: String, kind :: K.TypeKind, param-attrs :: List<ParameterAttribute>)
+sharing:
+  tostring(self) -> String:
+    cases(ParameterEntry) self:
+      | Parameter(param-name, kind, param-attrs) =>
+        kind.tostring() + " "
+          + for map(param-attr from param-attrs):
+              param-attr.tostring()
+            end.join-str(" ") + " %" + param-name
+    end
+  end
+end
 
 data ProcedureBlock:
   | Procedure(name         :: String,
               ret-type     :: K.TypeKind,
-              params       :: List<K.TypeKindField>,
+              params       :: List<ParameterEntry>,
+              func-attrs   :: List<FunctionAttribute>,
               instructions :: List<Instruction>)
 sharing:
   tostring(self) -> String:
     cases(ProcedureBlock) self:
       | Procedure(name, type, params, instructions) =>
         "define " + type.tostring() + " @" + name + "("
-          + (for map(param from params):
-              cases(K.TypeKindField) param:
-                | TypeField(param-name, kind) => kind.tostring() + " %" + param-name
-              end
-            end).join(", ")
+          + for map(param from params):
+              param.tostring()
+            end.join-str(", ")
           + ") {\n"
-          + for fold(base from "", instruction from instructions):
-              base + instruction.tostring() + "\n"
-            end
+          + for map(instruction from instructions):
+              instruction.tostring()
+            end.join-str("\n")
           + "}\n"
     end
   end
