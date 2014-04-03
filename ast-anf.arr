@@ -2,6 +2,7 @@
 
 provide *
 import ast as A
+import "ast-common.arr" as AC
 import pprint as PP
 
 INDENT = 2
@@ -57,7 +58,7 @@ sharing:
 end
 
 data AExpr:
-  | a-let(l :: Loc, bind :: ABind, e :: ALettable, body :: AExpr) with:
+  | a-let(l :: Loc, bind :: AC.Bind, e :: ALettable, body :: AExpr) with:
     label(self): "a-let" end,
     tosource(self):
       PP.soft-surround(INDENT, 1,
@@ -65,7 +66,7 @@ data AExpr:
         self.body.tosource(),
         str-end)
     end
-  | a-var(l :: Loc, bind :: ABind, e :: ALettable, body :: AExpr) with:
+  | a-var(l :: Loc, bind :: AC.Bind, e :: ALettable, body :: AExpr) with:
     label(self): "a-var" end,
     tosource(self):
       PP.soft-surround(INDENT, 1,
@@ -73,7 +74,7 @@ data AExpr:
         self.body.tosource(),
         str-end)
     end
-  | a-try(l :: Loc, body :: AExpr, b :: ABind, _except :: AExpr) with:
+  | a-try(l :: Loc, body :: AExpr, b :: AC.Bind, _except :: AExpr) with:
     label(self): "a-try" end,
     tosource(self):
       _try = str-try + break-one
@@ -106,16 +107,6 @@ data AExpr:
     tosource(self):
       self.e.tosource()
     end
-sharing:
-  visit(self, visitor):
-    self._match(visitor, fun(): raise("No visitor field for " + self.label()) end)
-  end
-end
-
-data ABind:
-  | a-bind(l :: Loc, id :: String, ann :: A.Ann) with:
-    label(self): "a-bind" end,
-    tosource(self): PP.str(self.id) end
 sharing:
   visit(self, visitor):
     self._match(visitor, fun(): raise("No visitor field for " + self.label()) end)
@@ -156,7 +147,7 @@ data AVariantMember:
   | a-variant-member(
       l :: Loc,
       member-type :: AMemberType,
-      bind :: ABind
+      bind :: AC.Bind
     ) with:
     label(self): "a-variant-member" end,
     tosource(self):
@@ -220,10 +211,10 @@ data ALettable:
     label(self): "a-get-bang" end,
     tosource(self): PP.infix(INDENT, 0, str-bang, self.obj.tosource(), PP.str(self.field)) end
     # TODO I (kechpaja) added "ret" so that we can type-check the return value
-  | a-lam(l :: Loc, args :: List<ABind>, ret :: A.Ann, body :: AExpr) with:
+  | a-lam(l :: Loc, args :: List<AC.Bind>, ret :: A.Ann, body :: AExpr) with:
     label(self): "a-lam" end,
     tosource(self): fun-method-pretty(PP.str("lam"), self.args, self.body) end
-  | a-method(l :: Loc, args :: List<ABind>, ret :: A.Ann, body :: AExpr) with:
+  | a-method(l :: Loc, args :: List<AC.Bind>, ret :: A.Ann, body :: AExpr) with:
     label(self): "a-method" end,
     tosource(self): fun-method-pretty(PP.str("method"), self.args, self.body) end
   | a-val(v :: AVal) with:
@@ -321,9 +312,9 @@ fun strip-loc-expr(expr :: AExpr):
   end
 end
 
-fun strip-loc-bind(bind :: ABind):
-  cases(ABind) bind:
-    | a-bind(_, id, ann) => a-bind(dummy-loc, id, ann)
+fun strip-loc-bind(bind :: AC.Bind):
+  cases(AC.Bind) bind:
+    | c-bind-loc(_, id, ann) => AC.c-bind(id, ann)
   end
 end
 
@@ -385,13 +376,13 @@ default-map-visitor = {
   a-provide(self, l :: Loc, val :: AExpr):
     a-provide(l, val.visit(self))
   end,
-  a-let(self, l :: Loc, bind :: ABind, e :: ALettable, body :: AExpr):
+  a-let(self, l :: Loc, bind :: AC.Bind, e :: ALettable, body :: AExpr):
     a-let(l, bind.visit(self), e.visit(self), body.visit(self))
   end,
-  a-var(self, l :: Loc, bind :: ABind, e :: ALettable, body :: AExpr):
+  a-var(self, l :: Loc, bind :: AC.Bind, e :: ALettable, body :: AExpr):
     a-var(l, bind.visit(self), e.visit(self), body.visit(self))
   end,
-  a-try(self, l :: Loc, body :: AExpr, b :: ABind, _except :: AExpr):
+  a-try(self, l :: Loc, body :: AExpr, b :: AC.Bind, _except :: AExpr):
     a-try(self, l, body.visit(self), b.visit(self), _except.visit(self))
   end,
   a-split-app(self, l :: Loc, is-var :: Boolean, f :: AVal, args :: List<AVal>, helper :: String, helper-args :: List<AVal>):
@@ -430,17 +421,14 @@ default-map-visitor = {
   a-get-bang(self, l :: Loc, obj :: AVal, field :: String):
     a-get-bang(l, obj.visit(self), field)
   end,
-  a-lam(self, l :: Loc, args :: List<ABind>, body :: AExpr):
+  a-lam(self, l :: Loc, args :: List<AC.Bind>, body :: AExpr):
     a-lam(l, args.map(_.visit(self)), body.visit(self))
   end,
-  a-method(self, l :: Loc, args :: List<ABind>, body :: AExpr):
+  a-method(self, l :: Loc, args :: List<AC.Bind>, body :: AExpr):
     a-method(l, args.map(_.visit(self)), body.visit(self))
   end,
   a-val(self, v :: AVal):
     a-val(v.visit(self))
-  end,
-  a-bind(self, l :: Loc, id :: String, ann :: A.Ann):
-    a-bind(l, id, ann)
   end,
   a-field(self, l :: Loc, name :: String, value :: AVal):
     a-field(l, name, value.visit(self))

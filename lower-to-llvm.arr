@@ -123,10 +123,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body) =>
             arguments = for map(arg from args): 
-              cases(AN.ABind) arg:
-                | a-bind(_, id, ann) => 
-                  L.Parameter(id, ann-to-type(ann), [])
-              end
+              L.Parameter(arg.id, ann-to-type(arg.ann), [])
             end
             L.Procedure(name, ann-to-type(ret), arguments, [], l-expr-to-llvm(body, adts))
         end

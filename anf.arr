@@ -4,6 +4,7 @@ provide *
 
 import ast as A
 import "ast-anf.arr" as N
+import "ast-common.arr" as AC
 
 fun anf-term(e :: A.Expr) -> N.AExpr:
   anf(e, fun(x):
@@ -18,11 +19,11 @@ fun anf-term(e :: A.Expr) -> N.AExpr:
     )
 end
 
-fun bind(l, id): N.a-bind(l, id, A.a_blank);
+fun bind(l, id): AC.c-bind-loc(l, id, A.a_blank);
 
 fun anf-bind(b):
   cases(A.Bind) b:
-    | s_bind(l, shadows, id, ann) => N.a-bind(l, id, ann)
+    | s_bind(l, shadows, id, ann) => AC.c-bind-loc(l, id, ann)
   end
 end
 
@@ -135,10 +136,10 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
         | link(f, r) =>
           cases(A.LetBind) f:
             | s_var_bind(l2, b, val) => anf(val, fun(lettable):
-              N.a-var(l2, N.a-bind(l2, b.id, b.ann), lettable,
+              N.a-var(l2, AC.c-bind-loc(l2, b.id, b.ann), lettable,
                 anf(A.s_let_expr(l, r, body), k)) end)
             | s_let_bind(l2, b, val) => anf(val, fun(lettable):
-              N.a-let(l2, N.a-bind(l2, b.id, b.ann), lettable,
+              N.a-let(l2, AC.c-bind-loc(l2, b.id, b.ann), lettable,
                 anf(A.s_let_expr(l, r, body), k)) end)
           end
       end
@@ -227,7 +228,7 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
 
     | s_fun(l, name, params, args, ret, doc, body, check) =>
       a-fun = N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body))
-      N.a-let(l, N.a-bind(l, name, A.a_blank), a-fun,
+      N.a-let(l, AC.c-bind-loc(l, name, A.a_blank), a-fun,
                 k(N.a-val(N.a-id(l, name))))
     | s_lam(l, params, args, ret, doc, body, _) =>
       k(N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body)))

@@ -5,6 +5,7 @@ provide *
 import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
 import "ast-anf.arr" as AN
+import "ast-common.arr" as AC
 
 data Int:
  | IntS(s :: String)
@@ -93,22 +94,18 @@ data Program:
   | l-prog(constants :: List<Global>, procs :: List<Procedure>, adts :: List<ADT>)
 end
 
-data Bind:
-    l-bind(id :: String, ann :: AN.ABind)
-end
-
 data Procedure:
-    l-proc(name :: String, args :: List<AN.ABind>, ret :: AN.Ann, body :: Expression)
+    l-proc(name :: String, args :: List<AC.Bind>, ret :: AN.Ann, body :: Expression)
 end
 
 data Lettable:
   | l-undefined
-  | l-application(f :: String, args :: List<String>)
+  | l-application(f :: AC.Bind, args :: List<String>)
   | l-select(field :: Number, id :: String, rep :: ConRep)
-  | l-update(table :: String, field-name :: String, value :: String)
-  | l-lookup(table :: String, field-name :: String)
-  | l-copy(table :: String)
-  | l-id(id :: String)
+  | l-update(table :: AC.Bind, field-name :: AC.Bind, value :: String)
+  | l-lookup(table :: AC.Bind, field-name :: AC.Bind)
+  | l-copy(table :: AC.Bind)
+  | l-id(id :: AC.Bind)
 end
 
 data Branch:
@@ -116,11 +113,11 @@ data Branch:
 end
 
 data Expression:
-  | l-switch(value :: String, branches :: List<Branch>, default :: Option<Expression>)
-  | l-let(binding :: String, e :: Lettable, body :: Expression)
+  | l-switch(value :: AC.Bind, branches :: List<Branch>, default :: Option<Expression>)
+  | l-let(binding :: AC.Bind, e :: Lettable, body :: Expression)
   | l-seq(e :: Lettable, body :: Expression)
-  | l-assign(binding :: String, e :: Lettable)
-  | l-if(cond :: String, consq :: Expression, altern :: Expression)
+  | l-assign(binding :: AC.Bind, e :: Lettable, body :: Expression)
+  | l-if(cond :: AC.Bind, consq :: Expression, altern :: Expression)
 end
 
 
