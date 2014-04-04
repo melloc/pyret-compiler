@@ -6,17 +6,18 @@ import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
 import "ast-anf.arr" as AN
 import "ast-common.arr" as AC
+import ast as A
 
 data Int:
  | IntS(s :: String)
 end
 
-data AccessPath: 
+data AccessPath:
   | OffP(i :: Number)
   | SelP(i :: Number, a :: AccessPath)
 end
 
-data VariantMember: 
+data VariantMember:
   | l-variant-member(name :: String)
 end
 
@@ -25,22 +26,37 @@ data Variant:
 end
 
 data ADT:
-  | l-adt(variants :: Variant, width :: Number)
+  | l-adt(name :: String, variants :: List<Variant>)
 sharing:
-  lookup-variant(self, needle-name):
+  lookup-variant(self, needle-name) -> Variant:
     cases(ADT) self:
-      | l-adt(haystack) => 
+      | l-adt(adt-name, haystack) =>
         needle = list.find(fun(variant):
           cases(Variant) variant:
             | l-variant(name, tag, fields) => name == needle-name
           end
         end, haystack)
-        cases(Option<ADT>) needle:
+        cases(Option<Variant>) needle:
           | some(adt) => adt
-          | none => 
+          | none =>
             raise("Variant " + needle-name + " does not exist! Bugs may exist in compiler.")
         end
     end
+  end
+end
+
+fun find-adt(ann :: A.Ann, haystack :: List<ADT>) -> ADT:
+  cases(A.Ann) ann:
+    | a_name(l, id) =>
+      found = list.find(fun(needle):
+        needle.name == id
+      end, haystack)
+      cases(Option<ADT>) found:
+        | some(adt) => adt
+        | none      => raise("Couldn't find data type " + id + " in program!")
+      end
+    | a_pred(l, obj, field) => raise("modules not yet supported")
+    | else => raise("Bad annotation: " + ann.torepr())
   end
 end
 
@@ -77,7 +93,7 @@ sharing:
     word = K.Integer(64)
     cases(ConRep) self:
       | Undecided                 => raise("This ConRep not implemented yet")
-      | Tagged(_)    => 
+      | Tagged(_)    =>
         K.Struct([K.TypeField("tag", word), K.TypeField("value", word)], false)
       | Constant(_)  => word
       | Transparent               => raise("This ConRep not implemented yet")
@@ -95,7 +111,7 @@ data Program:
 end
 
 data Procedure:
-    l-proc(name :: String, args :: List<AC.Bind>, ret :: AN.Ann, body :: Expression)
+    l-proc(name :: String, args :: List<AC.Bind>, ret :: A.Ann, body :: Expression)
 end
 
 data Lettable:
@@ -106,18 +122,21 @@ data Lettable:
   | l-lookup(table :: AC.Bind, field-name :: AC.Bind)
   | l-copy(table :: AC.Bind)
   | l-id(id :: AC.Bind)
+  | l-box(id :: AC.Bind)
+  | l-unbox(id :: AC.Bind)
 end
 
 data Branch:
-  | l-branch(constructor :: ConRep, code :: List<L.OpCode>)
+  | l-branch(constructor :: ConRep, code :: Expression)
 end
 
 data Expression:
   | l-switch(value :: AC.Bind, branches :: List<Branch>, default :: Option<Expression>)
   | l-let(binding :: AC.Bind, e :: Lettable, body :: Expression)
   | l-seq(e :: Lettable, body :: Expression)
-  | l-assign(binding :: AC.Bind, e :: Lettable, body :: Expression)
+  | l-assign(binding :: AC.Bind, val :: String, body :: Expression)
   | l-if(cond :: AC.Bind, consq :: Expression, altern :: Expression)
+  | l-ret(id :: AC.Bind)
 end
 
 

@@ -255,6 +255,13 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
       | h-if(c, t, e) => 
           s = check-merge(c, already).union(gfv-expr(t, already))
           s.union(gfv-expr(e, already))
+      | h-cases(_, val, branches, _else) =>
+        for fold(current from check-merge(val.id, already), branch from branches):
+          current.union(cases(AH.HCasesBranch) branch:
+            | h-cases-branch(name, args, body) =>
+              gfv-expr(body, already.union(set(for map(arg from args): arg.id end)))
+          end)
+        end
     end
   end
 
@@ -369,7 +376,7 @@ fun let-lettable(bind :: AC.Bind,
           AH.h-field(sf.name, tmp)
         end
 
-        datas := [AH.named-data(name, conv-variants, conv-shared)] + datas
+        datas := [AH.named-data(name, conv-variants, conv-shared, set([]))] + datas
 
         # Note: lists *must* be the same length!
         fun do-let-bindings(dvars :: List<String>,
@@ -530,6 +537,20 @@ fun aexpr-h(expr :: N.AExpr,
               AH.h-if(tmp, 
                    aexpr-h(t, vs, binds), 
                    aexpr-h(e, vs, binds)))
+    | a-cases(l, type, val, branches, _else) =>
+      hv = aval-h(val, vs)
+      hv-bind = AC.c-bind-loc(l, next-val(), type)
+      new-else = cases(Option<AExpr>) _else:
+        | some(e) => some(aexpr-h(e, vs, binds))
+        | none    => none
+      end
+      new-branches = for map(branch from branches):
+        cases(N.ACasesBranch) branch:
+          | a-cases-branch(_, name, args, body) =>
+            AH.h-cases-branch(name, args, aexpr-h(body, vs, binds + args))
+        end
+      end
+      AH.h-let(hv-bind, hv, AH.h-cases(type, hv-bind, new-branches, new-else))
     | a-lettable(e) => 
         cases (N.ALettable) e:
           | a-val(v) => 

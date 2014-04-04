@@ -12,9 +12,9 @@ fun identity(a): a end
 fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression)) -> AL.Expression:
   cases(AH.HLettable) e:
     | h-undefined             => plug(AL.l-undefined)
-    | h-box(id)               => raise("h-box not handled")
     | h-id(id)                => plug(AL.l-id(id))
-    | h-unbox(id)             => raise("h-unbox not handled")
+    | h-box(id)               => plug(AL.l-box(id))
+    | h-unbox(id)             => plug(AL.l-unbox(id))
     | h-data(name, closure)   => raise("h-data not handled")
     | h-lam(f, closure)       => raise("h-lam not handled")
     | h-app(f, args)          => plug(AL.l-application(f, args))
@@ -22,7 +22,7 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       new-copy = gensym("table-copy")
       updates  = fields.foldr(fun(field, next):
         cases(AH.HField) field:
-          | h-field(field-name, value) => 
+          | h-field(field-name, value) =>
             AL.l-seq(AL.l-update(new-copy, field-name, value), next)
         end
       end, plug(AL.l-id(new-copy)))
@@ -30,7 +30,7 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-update(table, fields) =>
       fields.foldr(fun(field, next):
         cases(AH.HField) field:
-          | h-field(field-name, value) => 
+          | h-field(field-name, value) =>
             AL.l-seq(AL.l-update(table, field-name, value), next)
         end
       end, plug(AL.l-undefined))
@@ -38,7 +38,7 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       new-copy = gensym("table-copy")
       updates  = fields.foldr(fun(field, next):
         cases(AH.HField) field:
-          | h-field(field-name, value) => 
+          | h-field(field-name, value) =>
             AL.l-seq(AL.l-update(new-copy, field-name, value), next)
         end
       end, plug(AL.l-id(new-copy)))
@@ -51,23 +51,44 @@ end
 
 fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression -> AL.Expression)) -> AL.Expression:
   cases(AH.HExpr) e:
-    | h-ret(id)                  =>
-    | h-let(bind, val, body)     => h-lettable-to-lower(val, fun(lettable):
-        plug(h-expr-to-lower(body, adts, fun(expr):
-          AH.l-let(bind, lettable, expr)
+    | h-ret(id)                  => AL.l-ret(id)
+    | h-let(bind, val, body)     =>
+      h-lettable-to-lower(val, fun(lettable):
+        plug(h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
+          AL.l-let(bind, lettable, expr)
         end))
       end)
-    | h-assign(bind, val, body)  => h-expr-to-lower(body, fun(expr):
+    | h-assign(bind, val, body)  => h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
         AL.l-assign(bind, val, expr)
       end)
     | h-try(body, bind, _except) => raise("exception handling not yet implemented")
     | h-if(cond, consq, altern)  =>
+      h-expr-to-lower(consq, adts, fun(lower-consq :: AL.Expression):
+        h-expr-to-lower(altern, adts, fun(lower-altern :: AL.Expression):
+          plug(AL.l-if(cond, lower-consq, lower-altern))
+        end)
+      end)
+    | h-cases(type, val, branches, _else) =>
+      adt = AL.find-adt(type, adts)
+      lower-branches = for map(branch from branches):
+        cases(AH.HCasesBranch) branch:
+          | h-cases-branch(name, args, body) =>
+            variant = adt.lookup-variant(name)
+            lower-body = h-expr-to-lower(body, adts, identity)
+            AL.l-branch(variant.tag, lower-body)
+        end
+      end
+      lower-else = cases(Option<AH.HExpr>) _else:
+        | some(else-hexpr) => some(h-expr-to-lower(else-hexpr, adts, identity))
+        | none    => none
+      end
+      plug(AL.l-switch(val, branches, lower-else))
   end
 end
 
 fun h-proc-to-lower(proc :: AH.NamedFunc, adts :: List<AL.ADT>) -> AL.Procedure:
   cases(AH.NamedFunc) proc:
-    | named-func(name, args, body, ret) => 
+    | named-func(name, args, body, ret) =>
       l-body = h-expr-to-lower(body, adts, identity)
       AL.l-proc(name, args, ret, l-body)
   end
@@ -77,7 +98,7 @@ fun h-variant-member-to-lower(member :: AN.AVariantMember) -> AL.VariantMember:
   # TODO: Some of this may need an overhaul
   cases(AN.AVariantMember) member:
     | a-variant-member(l, member-type, bind) =>
-      AL.l-variant-member(bind.name)
+      AL.l-variant-member(bind.id)
   end
 end
 
@@ -95,10 +116,10 @@ end
 fun h-adt-to-lower(adt :: AH.NamedData) -> AL.ADT:
   cases(AH.NamedData) adt:
     | named-data(name, variants, shared, closure) =>
-      var count = 1
-      AL.l-adt(for map(variant from variants):
-        h-variant-to-lower(variant, count)
+      var count = 0
+      AL.l-adt(name, for map(variant from variants):
         count := count + 1
+        h-variant-to-lower(variant, count)
       end)
   end
 end

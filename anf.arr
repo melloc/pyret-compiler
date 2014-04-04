@@ -23,7 +23,7 @@ fun bind(l, id): AC.c-bind-loc(l, id, A.a_blank);
 
 fun anf-bind(b):
   cases(A.Bind) b:
-    | s_bind(l, shadows, id, ann) => AC.c-bind-loc(l, id, ann)
+    | s_bind(l, id, ann) => AC.c-bind-loc(l, id, ann)
   end
 end
 
@@ -120,6 +120,13 @@ fun convert-math-method(name :: String) -> String:
   end
 end
 
+fun anf-branch(branch :: A.CasesBranch, k :: (N.ALettable -> N.AExpr)) -> N.ACasesBranch:
+  cases(A.CasesBranch) branch:
+    | s_cases_branch(l, name, args, body) =>
+      N.a-cases-branch(l, name, args.map(anf-bind), anf(body, k))
+  end
+end
+
 fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
   cases(A.Expr) e:
     | s_num(l, n) => k(N.a-val(N.a-num(l, n)))
@@ -153,7 +160,7 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
       end
       anf(A.s_let_expr(l, let-binds, A.s_block(l, assigns + [body])), k)
 
-    | s_data_expr(l, name, params, mixins, variants, shared, _check) =>
+    | s_data(l, name, params, mixins, variants, shared, _check) =>
       fun type-of-str(str):
         if str == "normal": N.a-normal
         else if str == "cyclic": N.a-cyclic
@@ -219,6 +226,19 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
       else:
         anf(_else, k)
       end
+
+    | s_cases(l, type, val, branches) =>
+      anf-name(val, "anf_cases", fun(t):
+        N.a-cases(l, type, t, for map(branch from branches):
+          anf-branch(branch, k)
+        end, none)
+      end)
+    | s_cases_else(l, type, val, branches, _else) =>
+      anf-name(val, "anf_cases", fun(t):
+        N.a-cases(l, type, t, for map(branch from branches):
+          anf-branch(branch, k)
+        end, some(anf(_else, k)))
+      end)
 
     | s_try(l, body, id, _except) =>
       N.a-try(l, anf-term(body), id, anf-term(_except))

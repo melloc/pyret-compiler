@@ -30,7 +30,10 @@ data HLettable:
   | h-get-bang(obj :: AC.Bind, field :: AC.Bind) # more?
   | h-closure(fields :: List<HField>)
   | h-closure-lookup(closure :: String, field :: String)
-  | h-cases # TODO
+end
+
+data HCasesBranch:
+  | h-cases-branch(name :: String, args :: List<AC.Bind>, body :: HExpr)
 end
 
 # We are, for now, just saving the binds as such. 
@@ -45,6 +48,7 @@ data HExpr:
   | h-assign(bind :: AC.Bind, val :: String, body :: HExpr) 
   | h-try(body :: HExpr, bind :: AC.Bind, _except :: HExpr)
   | h-if(c :: AC.Bind, t :: HExpr, e :: HExpr)
+  | h-cases(type :: A.Ann, val :: AC.Bind, branches :: List<HCasesBranch>, _else :: Option<HExpr>)
 end
 
 # and other types necessary for data expressions: 

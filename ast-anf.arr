@@ -57,6 +57,10 @@ sharing:
   end
 end
 
+data ACasesBranch:
+  | a-cases-branch(l :: Loc, name :: String, args :: List<AC.Bind>, body :: AExpr)
+end
+
 data AExpr:
   | a-let(l :: Loc, bind :: AC.Bind, e :: ALettable, body :: AExpr) with:
     label(self): "a-let" end,
@@ -101,6 +105,15 @@ data AExpr:
           PP.nest(INDENT, break-one + self.t.tosource()) +
         str-elsecolon
           PP.nest(INDENT, break-one + self.e.tosource())
+    end
+  | a-cases(l :: Loc,
+            type :: A.Ann,
+            val :: AVal,
+            branches :: List<ACasesBranch>,
+            _else :: Option<AExpr>) with:
+    label(self): "a-cases" end,
+    tosource(self):
+      raise("a-cases.tosource() not implemented")
     end
   | a-lettable(e :: ALettable) with:
     label(self): "a-lettable" end,

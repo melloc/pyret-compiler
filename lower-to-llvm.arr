@@ -27,11 +27,13 @@ import "helpers.arr" as H
 # 
 # Data = VariantList(List<Variant>)
 
+word = K.Integer(64)
+double-word = K.Struct([word, word], false)
 
 fun ann-to-type(annotation :: A.Ann) -> K.TypeKind:
     cases(A.Ann) annotation:
-      | a_blank => raise("Not handled")
-      | a_any   => raise("Not handled")
+      | a_blank => double-word
+      | a_any   => double-word
       | a_name(l, id)           => raise("Not handled")
       | a_arrow(l, args, ret)   => K.FunctionType()
       | a_method(l, args, ret)  => K.FunctionType()
@@ -55,8 +57,15 @@ end
 word-star = K.Pointer(K.Integer(64), none)
 
 
-fun l-lettable-to-llvm(l :: AL.Lettable, adts :: AL.ADT) -> H.Pair<L.Instruction, L.OpCode>:
+fun l-lettable-to-llvm(l :: AL.Lettable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
   cases(AL.Lettable) l:
+    | l-undefined => raise("l-undefined not handled")
+    | l-update(table, field-name, value) => raise("l-update not handled")
+    | l-lookup(table, field-name) => raise("l-lookup not handled")
+    | l-copy(table) => raise("l-copy not handled")
+    | l-id(id) => raise("l-id not handled")
+    | l-box(id) => raise("l-box not handled")
+    | l-unbox(id) => raise("l-unbox not handled")
     | l-application(f, args) => 
       H.pair(empty, L.Call(false, L.CCC, word-star, f, for map(arg from args):
         L.ArgPair(word-star, arg)
