@@ -67,6 +67,7 @@ funcptr-field-id = "funcptr.f"
 
 num-len = 10
 
+default-loc = A.loc("N/A", -1, -1)
 
 ###################
 # Mutable Globals #
@@ -99,7 +100,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
   end
 
   fun filter-lets-field(field :: AH.HField, subs :: List<Subst>) -> AH.HField:
-    AH.h-field(field.name, lookup-in-subst(field.value, subs))
+    AH.h-field(field.name, lookup-in-subst(field.value, subs).id)
   end
 
   fun filter-lets-lettable(expr :: AH.HLettable, 
@@ -194,8 +195,8 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           # There will be no need to substitute into the left-hand side
           # of an assign expression. 
           AH.h-assign(bind, 
-                   lookup-in-subst(val, subs), 
-                   filter-lets-expr(body, subs, scope))
+                      lookup-in-subst(val, subs).id, # TODO right?
+                      filter-lets-expr(body, subs, scope))
       | h-try(body, bind, _except) => 
           # TODO I think we do need to replace "bind".
           new-id = scope + bind.id
@@ -316,7 +317,7 @@ fun let-lettable(bind :: AC.Bind,
           tmp = next-val()
           AH.h-let(AC.c-bind(tmp, A.a_blank),
                 aval-h(f.value, vs), 
-                obj-fold(r, link(AH.h-field(f.name, tmp), done)))
+                obj-fold(r, link(AH.h-field(f.name, tmp), done), finish))
       | empty => 
           # TODO reversing the list should not matter. 
           # I am just putting it there for reassurance. 
@@ -422,36 +423,45 @@ fun let-lettable(bind :: AC.Bind,
     | a-update(l, super, fields) => 
         tmp = next-val()
         AH.h-let(AC.c-bind(tmp, A.a_blank),
-              aval-h(super, vs),
-              obj-fold(fields, 
-                       empty, 
-                       fun(flds :: List<AH.HField>) -> AH.HLettable:
-                         AH.h-update(tmp, flds)
-                       end))
+                 aval-h(super, vs),
+                 obj-fold(fields, 
+                          empty, 
+                          fun(flds :: List<AH.HField>) -> AH.HLettable:
+                            AH.h-update(tmp, flds)
+                          end))
     | a-extend(l, super, fields) => 
         tmp = next-val()
         AH.h-let(AC.c-bind(tmp, A.a_blank),
-              aval-h(super, vs),
-              obj-fold(fields, 
-                       empty, 
-                       fun(flds :: List<AH.HField>) -> AH.HLettable:
-                         AH.h-extend(tmp, flds)
-                       end))
+                 aval-h(super, vs),
+                 obj-fold(fields, 
+                          empty, 
+                          fun(flds :: List<AH.HField>) -> AH.HLettable:
+                            AH.h-extend(tmp, flds)
+                          end))
     | a-dot(l, obj, field) => 
         tmp = next-val()
         AH.h-let(AC.c-bind(tmp, A.a_blank), 
-              aval-h(obj, vs), 
-              AH.h-let(bind, AH.h-dot(tmp, field), aexpr-h(b, vs, binds)))
+                 aval-h(obj, vs), 
+                 AH.h-let(bind, 
+                          AH.h-dot(AC.c-bind(tmp, A.a_blank), 
+                                   AC.c-bind(field, A.a_blank)), 
+                          aexpr-h(b, vs, binds)))
     | a-colon(l, obj, field) =>
         tmp = next-val()
         AH.h-let(AC.c-bind(tmp, A.a_blank),
-              aval-h(obj, vs),
-              AH.h-let(bind, AH.h-colon(tmp, field), aexpr-h(b, vs, binds)))
+                 aval-h(obj, vs),
+                 AH.h-let(bind, 
+                          AH.h-colon(AC.c-bind(tmp, A.a_blank), 
+                                     AC.c-bind(field, A.a_blank)), 
+                          aexpr-h(b, vs, binds)))
     | a-get-bang(l, obj, field) => 
         tmp = next-val()
         AH.h-let(AC.c-bind(tmp, A.a_blank),
-              aval-h(obj, vs),
-              AH.h-let(bind, AH.h-get-bang(tmp, field), aexpr-h(b, vs, binds)))
+                 aval-h(obj, vs),
+                 AH.h-let(bind, 
+                          AH.h-get-bang(AC.c-bind(tmp, A.a_blank), 
+                                        AC.c-bind(field, A.a_blank)), 
+                          aexpr-h(b, vs, binds)))
     | a-lam(l, args, ret, body) =>
         name = next-func-name()
         fbody = aexpr-h(body, vs, binds)
@@ -524,7 +534,11 @@ fun aexpr-h(expr :: N.AExpr,
         else:
           let-lettable(tmp-bind,
                        e,
-                       N.a-var(l, bind, N.a-val(N.a-id(tmp)), body), new-binds)
+                       N.a-var(l, 
+                               bind, 
+                               N.a-val(N.a-id(default-loc, tmp)), 
+                               body), 
+                               new-binds)
         end
     | a-try(l, body, b, _except) =>  
         AH.h-try(aexpr-h(body, vs, binds), b, aexpr-h(_except, vs, binds))
@@ -560,7 +574,7 @@ fun aexpr-h(expr :: N.AExpr,
               tmp = next-val()
               let-lettable(AC.c-bind(tmp, A.a_blank),
                            e,
-                           N.a-lettable(N.a-val(N.a-id(tmp))),
+                           N.a-lettable(N.a-val(N.a-id(default-loc, tmp))),
                            vs,
                            binds)
         end
