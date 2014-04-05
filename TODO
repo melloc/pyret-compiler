@@ -1,29 +1,18 @@
 Things to do for compiler: 
 
-ANF Passes:
-    - Filter lets
-    - Lift data type declarations to top
-    - Lift numbers, strings, booleans
-    - Lift/rewrite functions, rewrite function calls
-        - All functions are declared at top
-        - Detect free variables
-        - Add argument to function call that takes record
-
-    - Update variable names to reflect lack of scope in LLVM
-    - I think detecting free variables should come after scoping mods,
-      since the variables will have different names then. 
-
 ANF->Intermediate:
-    - Introduce/instantiate closures
-    - Rewrite cases to select appropriate parts of object memory/do binding
     - Rewrite data type constructors to be lower level
     - Add/create vtable information
 
 Intermediate Passes:
     - Rewrite tests in pattern matching
 
-- We need to finish flushing out LLVM representation
+Lower:
+    - Finish converting to LLVM
+    - Handle different values, data construction
 
+LLVM:
+    - Finish setting up Judy array functions
 
 Something to discuss: if we filter out unnecessary lets, we will not necessarily produce exactly the same output as the interpreter in error cases. Specifically, some type mismatch errors will appear only later in the program, since they would otherwise have been caught in an assign operation. 
 
