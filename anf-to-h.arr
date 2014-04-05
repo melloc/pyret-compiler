@@ -144,10 +144,10 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
       | h-obj(fields) => 
           AH.h-obj(for map(f from fields): filter-lets-field(f, subs) end)
       | h-update(super, fields) => 
-          AH.h-update(lookup-in-subst(super, subs), 
+          AH.h-update(lookup-in-subst(super.id, subs), 
                    for map(f from fields): filter-lets-field(f, subs) end)
       | h-extend(super, fields) => 
-          AH.h-extend(lookup-in-subst(super, subs), 
+          AH.h-extend(lookup-in-subst(super.id, subs), 
                    for map(f from fields): filter-lets-field(f, subs) end)
       | h-dot(obj, field) => 
           AH.h-dot(lookup-in-subst(obj.id, subs), field)
@@ -279,7 +279,7 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
       | h-id(bind) => check-merge(bind.id, already)
       | h-box(bind) => check-merge(bind.id, already)
       | h-unbox(bind) => check-merge(bind.id, already)
-      | h-lam(f, closure) => check-merge(closure, already) # TODO do we need this? 
+      | h-lam(f, closure) => check-merge(closure.id, already) # TODO do we need this? 
       | h-app(func, args) => 
           for fold(s from check-merge(func.id, already), a from args):
             s.union(check-merge(a, already))
@@ -427,7 +427,7 @@ fun let-lettable(bind :: AC.Bind,
                  obj-fold(fields, 
                           empty, 
                           fun(flds :: List<AH.HField>) -> AH.HLettable:
-                            AH.h-update(tmp, flds)
+                            AH.h-update(AC.c-bind(tmp, A.a_blank), flds)
                           end))
     | a-extend(l, super, fields) => 
         tmp = next-val()
@@ -436,7 +436,7 @@ fun let-lettable(bind :: AC.Bind,
                  obj-fold(fields, 
                           empty, 
                           fun(flds :: List<AH.HField>) -> AH.HLettable:
-                            AH.h-extend(tmp, flds)
+                            AH.h-extend(AC.c-bind(tmp, A.a_blank), flds)
                           end))
     | a-dot(l, obj, field) => 
         tmp = next-val()

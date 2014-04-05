@@ -23,8 +23,8 @@ data HLettable:
   | h-app(f :: AC.Bind, args :: List<String>) with:
     tosyn(self): self.f + "(" + self.args.str-join(",") + ")" end
   | h-obj(fields :: List<HField>)
-  | h-update(super :: String, fields :: List<HField>)
-  | h-extend(super :: String, fields :: List<HField>) # TODO merge?
+  | h-update(super :: AC.Bind, fields :: List<HField>)
+  | h-extend(super :: AC.Bind, fields :: List<HField>) # TODO merge?
   | h-dot(obj :: AC.Bind, field :: AC.Bind)
   | h-colon(obj :: AC.Bind, field :: AC.Bind)
   | h-get-bang(obj :: AC.Bind, field :: AC.Bind) # more?

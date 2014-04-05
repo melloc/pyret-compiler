@@ -116,7 +116,7 @@ fun convert-math-method(name :: String) -> String:
   else if name == "op/":
     "rational-divide-method"
   else:
-    raise("Unsupported operation!")
+    raise("Unsupported operation: " + name)
   end
 end
 
@@ -317,7 +317,17 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
               k(N.a-extend(l, o, new-fields))
             end)
         end)
+    | s_update(l, obj, fields) => 
+      exprs = fields.map(_.value)
 
+      anf-name(obj, "anf_update", fun(o): 
+          anf-name-rec(exprs, "anf_update", fun(ts): 
+              new-fields = for map2(f from fields, t from ts): 
+                  N.a-field(f.l, f.name.s, t)
+                end
+              k(N.a-update(l, o, new-fields))
+            end)
+        end)
     | s_paren(_, expr) => anf(expr, k)
     | s_let(_, _, _) => raise("s_let should be handled by anf-block: " + torepr(e))
     | s_var(_, _, _) => raise("s_var should be handled by anf-block: " + torepr(e))
