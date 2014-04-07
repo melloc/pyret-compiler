@@ -18,7 +18,8 @@ builtin-functions = [
     "rational-plus-method", 
     "rational-minus-method", 
     "rational-times-method", 
-    "rational-divide-method" 
+    "rational-divide-method",
+    "rational-equals-method"
 ]
     
 

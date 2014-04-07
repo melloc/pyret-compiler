@@ -115,6 +115,8 @@ fun convert-math-method(name :: String) -> String:
     "rational-times-method"
   else if name == "op/":
     "rational-divide-method"
+  else if name == "op==":
+    "rational-equals-method"
   else:
     raise("Unsupported operation: " + name)
   end
