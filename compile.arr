@@ -26,7 +26,12 @@ fun main(argc :: Number, argv :: List<String>) -> Number:
         h-rep     = h.anf-to-h(anf-rep)
         lower-rep = lower.h-to-lower(h-rep)
         llvm-rep  = llvm.lower-to-llvm(lower-rep)
-        H.put-file-text(output-filename, llvm-rep.tostring())
+        prelude   = H.get-file-text("runtime/prelude.ll")
+        table-lib = H.get-file-text("runtime/table.ll")
+        num-lib   = H.get-file-text("runtime/num.ll")
+        prog-str  = llvm-rep.tostring()
+        llvm-str  = prelude + table-lib + num-lib + prog-str
+        H.put-file-text(output-filename, llvm-str)
         0
     end
 end
