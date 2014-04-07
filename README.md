@@ -8,12 +8,12 @@ Usage
 
 You can invoke the compiler as follows:
 
-  raco pyret compile.arr path/to/my-prog.arr build/my-prog.ll
+  raco pyret compile.arr my-prog.arr my-prog.ll
 
 And then build the output LLVM IR using clang. You will need to link against
-libgmp:
+libgmp and libJudy:
 
-  clang -Xlinker /usr/lib64/libgmp.so -o build/my-prog build/my-prog.ll
+  clang -Xlinker /usr/lib/libgmp.so -Xlinker /usr/lib/libJudy.so -o my-prog my-prog.ll
 
 
 
