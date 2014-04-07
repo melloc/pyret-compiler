@@ -27,6 +27,20 @@ sharing:
   end
 end
 
+data ArgumentEntry:
+  | Argument(kind :: K.TypeKind, value :: K.ValueKind, param-attrs :: List<ParameterAttribute>)
+sharing:
+  tostring(self) -> String:
+    cases(ArgumentEntry) self:
+      | Argument(kind, value, param-attrs) =>
+        kind.tostring() + " "
+          + for map(param-attr from param-attrs):
+              param-attr.tostring()
+            end.join-str(" ") + " " + value.tostring()
+    end
+  end
+end
+
 data ParameterEntry:
   | Parameter(param-name :: String, kind :: K.TypeKind, param-attrs :: List<ParameterAttribute>)
 sharing:
@@ -50,7 +64,7 @@ data ProcedureBlock:
 sharing:
   tostring(self) -> String:
     cases(ProcedureBlock) self:
-      | Procedure(name, type, params, instructions) =>
+      | Procedure(name, type, params, func-attrs, instructions) =>
         "define " + type.tostring() + " @" + name + "("
           + for map(param from params):
               param.tostring()
@@ -239,7 +253,7 @@ data Instruction:
 sharing:
   tostring(self) -> String:
     cases(Instruction) self:
-      | Assign(name, op) => name + " := " + op.tostring()
+      | Assign(name, op) => "%" + name + " = " + op.tostring()
       | NoAssign(op)     => op.tostring()
       | Label(name)      => name + ":"
     end
@@ -253,7 +267,8 @@ end
 data OpCode:
   | Invalid # not an instruction
   # Terminator Instructions
-  | Ret(typ :: K.TypeKind, value :: Option<K.ValueKind>)
+  | Ret(typ :: K.TypeKind, value :: K.ValueKind)
+  | RetVoid
   | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String)
   | BrUnconditional(dest-label :: String)
   | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>)
@@ -361,12 +376,12 @@ data OpCode:
          typ  :: K.TypeKind,
          op1  :: K.ValueKind,
          op2  :: K.ValueKind)
-  | PHI(typ   :: K.TypeKind, pairs :: List<Pair<K.TypeKind,String>>)
+  | PHI(typ   :: K.TypeKind, pairs :: List<H.Pair<K.TypeKind,String>>)
   | Call(tail   :: Bool,
          cconv  :: CallingConvention,
          retty  :: K.TypeKind,
-         func   :: String,
-         args   :: List<ArgPair>,
+         func   :: K.ValueKind,
+         args   :: List<ArgumentEntry>,
          fattrs :: List<FunctionAttribute>)
   | Select(selty :: K.TypeKind,
            cond :: K.ValueKind,
@@ -390,13 +405,12 @@ data OpCode:
 sharing:
   tostring(self) -> String:
     cases(OpCode) self:
-      | Invalid =>
+      | Invalid => "invalid"
       | Ret(typ, value) =>
         "ret " + typ.tostring()
-          + cases(Option<K.ValueKind>) value:
-              | none => ""
-              | some(val) => " " + val.tostring()
-            end
+          + value.tostring()
+      | RetVoid =>
+        "ret void"
       | BrConditional(cond-id, consq-label, altern-label) =>
         "br i1 " + cond-id + ", label " + consq-label + ", label " + altern-label
       | BrUnconditional(dest-label :: String) =>

@@ -41,7 +41,7 @@ sharing:
       | FunctionType(ret :: TypeKind, params :: List<TypeKind>) =>
         ret.tostring() + " (" + params.join-str(", ") + ")"
       | Struct(fields, packed) =>
-        inside = fields.join-str(", ")
+        inside = "{ " + fields.join-str(", ") + " }"
         if packed: "<" + inside + ">" else: inside end
       | Arr(len :: Number, typ :: TypeKind) =>
         "[" + len.tostring() + " x " + typ.tostring() + "]"
@@ -102,6 +102,7 @@ data ValueKind:
   | FunctionValue
   | GlobalAlias
   | GlobalVariable(id :: String)
+  | LocalVariable(id :: String)
   | UndefValue
   | Instruction #(op :: LLVM.Opcode)
 sharing:
@@ -126,7 +127,8 @@ sharing:
       | ConstantDataVector =>
       | ConstantExpr =>
       | ConstantFP(value :: Number)  =>
-      | ConstantInt(value :: Number) =>
+      | ConstantInt(value :: Number) => 
+        value.tostring()
       | ConstantPointerNull =>
         "null"
       | ConstantStruct(fields :: List<StructField>) =>
@@ -143,6 +145,8 @@ sharing:
       | GlobalAlias   =>
       | GlobalVariable(id :: String) =>
         "@" + id
+      | LocalVariable(id :: String) =>
+        "%" + id
       | UndefValue  =>
         "undef"
       | Instruction =>

@@ -27,7 +27,7 @@ next-val = (fun():
   var n = 0
   fun() -> String:
     n := n + 1
-    "%id.v" + n.tostring()
+    "id.v" + n.tostring()
   end
 end)()
 
@@ -35,7 +35,7 @@ next-scope = (fun():
   var n = 0
   fun() -> String:
     n := n + 1
-    "%s" + n.tostring() + "."
+    "s" + n.tostring() + "."
   end
 end)()
 
@@ -43,7 +43,7 @@ next-func-name = (fun():
   var n = 0
   fun() -> String: 
     n := n + 1
-    "@func.p" + n.tostring()
+    "func.p" + n.tostring()
   end
 end)()
 
@@ -51,16 +51,16 @@ next-string-name = (fun():
   var n = 0
   fun() -> String:
     n := n + 1
-    "@str.p" + n.tostring()
+    "str.p" + n.tostring()
   end
 end)()
 
-num-prefix = "@num.v"
+num-prefix = "num.v"
 
-num-id-prefix = "%num.p"
-string-id-prefix = "%str.p"
-bool-id-true = "%bool.p-true"
-bool-id-false = "%bool.p-false"
+num-id-prefix = "num.p"
+string-id-prefix = "str.p"
+bool-id-true = "bool.p-true"
+bool-id-false = "bool.p-false"
 
 closure-arg-bind = AC.c-bind("closure.p", A.a_blank)
 closure-field-id = "closure.f"

@@ -7,11 +7,6 @@
 ;; clang -Xlinker /usr/lib64/libgmp.so -o my-prog my-prog.ll
 ;;
 
-target triple = "x86_64-pc-linux-gnu"
-
-;; we want malloc
-declare noalias i8* @malloc(i64) nounwind
-
 ;; mpz_t (integer) struct
 %struct.__mpz_struct = type { i32, i32, i64* }
 ;; mpq_t (rational) struct
