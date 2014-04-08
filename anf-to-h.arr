@@ -168,22 +168,23 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
       | h-let(bind, val, body) =>
           # TODO update this branch
           nval = filter-lets-lettable(val, subs)
+          # TODO TODO TODO nval needs to be a type check. Function call?
           cases (AH.HLettable) nval:
             | h-id(id) => 
-                if (bind.ann == A.a_any) or (bind.ann == A.a_blank):
-                  filter-lets-expr(body, 
-                                   link(let-sub(bind.id, id), 
-                                        subs), 
-                                   scope)
-                else:
-                  new-id = scope + bind.id
-                  new-bind = bind.rename(new-id) # TODO right?
-                  AH.h-let(new-bind, 
-                        nval, 
-                        filter-lets-expr(body, 
-                                         link(let-sub(bind.id, new-bind), 
-                                              subs), 
-                                         scope))
+            #    if (bind.ann == A.a_any) or (bind.ann == A.a_blank):
+                filter-lets-expr(body, 
+                                 link(let-sub(bind.id, id), 
+                                      subs), 
+                                 scope)
+           #     else:
+          #        new-id = scope + bind.id
+         #         new-bind = bind.rename(new-id) # TODO right?
+        #          AH.h-let(new-bind, 
+       #                 nval, 
+      #                  filter-lets-expr(body, 
+     #                                    link(let-sub(bind.id, new-bind), 
+    #                                          subs), 
+   #                                      scope))
                         # TODO check all of this twice. 
                 end
             | else => 
