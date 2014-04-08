@@ -20,7 +20,7 @@ data HLettable:
   | h-unbox(id :: String) with: 
     tosyn(self): "unbox " + self.id end
   | h-lam(f :: AC.Bind, closure :: AC.Bind)
-  | h-app(f :: AC.Bind, args :: List<String>) with:
+  | h-app(f :: AC.Bind, args :: List<AC.Bind>) with:
     tosyn(self): self.f + "(" + self.args.str-join(",") + ")" end
   | h-obj(fields :: List<HField>)
   | h-update(super :: AC.Bind, fields :: List<HField>)
