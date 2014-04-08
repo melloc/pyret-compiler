@@ -116,7 +116,7 @@ end
 
 data Lettable:
   | l-undefined
-  | l-application(f :: AC.Bind, args :: List<String>)
+  | l-application(f :: AC.Bind, args :: List<AC.Bind>)
   | l-select(field :: Number, id :: String, rep :: ConRep)
   | l-update(table :: AC.Bind, field-name :: AC.Bind, value :: String)
   | l-lookup(table :: AC.Bind, field-name :: AC.Bind)

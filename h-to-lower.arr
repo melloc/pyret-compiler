@@ -51,7 +51,7 @@ end
 
 fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression -> AL.Expression)) -> AL.Expression:
   cases(AH.HExpr) e:
-    | h-ret(id)                  => AL.l-ret(id)
+    | h-ret(id)                  => plug(AL.l-ret(id))
     | h-let(bind, val, body)     =>
       h-lettable-to-lower(val, fun(lettable):
         plug(h-expr-to-lower(body, adts, fun(expr :: AL.Expression):

@@ -141,7 +141,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           AH.h-lam(f, closure)
       | h-app(f, args) => 
           AH.h-app(lookup-in-subst(f.id, subs), 
-                for map(a from args): lookup-in-subst(a, subs) end)
+                for map(arg from args): lookup-in-subst(arg.id, subs) end)
       | h-obj(fields) => 
           AH.h-obj(for map(f from fields): filter-lets-field(f, subs) end)
       | h-update(super, fields) => 
@@ -282,8 +282,8 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
       | h-unbox(bind) => check-merge(bind.id, already)
       | h-lam(f, closure) => check-merge(closure.id, already) # TODO do we need this? 
       | h-app(func, args) => 
-          for fold(s from check-merge(func.id, already), a from args):
-            s.union(check-merge(a, already))
+          for fold(s from check-merge(func.id, already), arg from args):
+            s.union(check-merge(arg.id, already))
           end
       | h-obj(fields) => gfv-fields(fields.id, already)
       | h-update(super, fields) => 
@@ -328,14 +328,14 @@ fun let-lettable(bind :: AC.Bind,
 
   # this is like obj-fold, but for function calls. 
   fun app-fold(args :: List<AVal>,
-               done :: List<String>,
-               finish :: (List<String> -> AH.HLettable)) -> AH.HExpr:
+               done :: List<AC.Bind>,
+               finish :: (List<AC.Bind> -> AH.HLettable)) -> AH.HExpr:
     cases (List<AVal>) args:
       | link(f, r) => 
-          tmp = next-val()
-          AH.h-let(AC.c-bind(tmp, A.a_blank),
+          tmp-bind = AC.c-bind(next-val(), A.a_blank)
+          AH.h-let(tmp-bind,
                 aval-h(f, vs),
-                app-fold(r, link(tmp, done), finish))
+                app-fold(r, link(tmp-bind, done), finish))
       | empty => 
           AH.h-let(bind, finish(done.reverse()), aexpr-h(b, vs, binds))
     end
@@ -404,18 +404,18 @@ fun let-lettable(bind :: AC.Bind,
                        aexpr-h(b, vs, binds)))
     | a-app(l, f, args) => 
         tmp = AC.c-bind(next-val(), A.a_blank)
-        tmp-closure = next-val()
+        tmp-closure = AC.c-bind(next-val(), A.a_blank)
         tmp-func = AC.c-bind(next-val(), A.a_blank)
         AH.h-let(tmp,
               aval-h(f, vs),
-              AH.h-let(AC.c-bind(tmp-closure, A.a_blank),
+              AH.h-let(tmp-closure,
                     AH.h-dot(tmp, AC.c-bind(closure-field-id, A.a_blank)),
                     AH.h-let(tmp-func,
                           AH.h-dot(tmp, AC.c-bind(funcptr-field-id, A.a_blank)),
                           app-fold(args, 
                                    empty,
-                                   fun(fargs :: List<String>) -> AH.HLettable:
-                                     AH.h-app(tmp-func, [tmp-closure] + fargs)
+                                   fun(fargs :: List<AC.Bind>) -> AH.HLettable:
+                                     AH.h-app(tmp-func, link(tmp-closure, fargs))
                                    end))))
     | a-help-app(l, f, args) => 
         raise("Congratulations! You've created an a-help-app!")

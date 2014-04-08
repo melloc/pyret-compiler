@@ -5,6 +5,7 @@ provide *
 import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
 import ast as A
+import "ast-common.arr" as AC
 import "ast-anf.arr" as AN
 import "ast-lower.arr" as AL
 import "helpers.arr" as H
@@ -51,6 +52,48 @@ sharing:
         end
     end
   end
+end
+
+data IdentifierScope:
+  | LocalIdentifier
+  | GlobalIdentifier
+end
+
+data Identifier:
+  | identifier(id :: AC.Bind, scope :: IdentifierScope)
+end
+
+data IdentifierTable:
+  | identifier-table(identifiers :: List<Identifier>)
+sharing:
+  lookup-scope(self, needle :: AC.Bind) -> Scope:
+    cases(IdentifierTable) self:
+      | identifier-table(haystack) =>
+        found = list.find(fun(current):
+          cases(Identifier) current:
+            | identifier(bind, scope) =>
+              bind.id == needle.id
+          end
+        end, haystack)
+        cases(Option<Identifier>) found:
+          | some(i) => i.scope
+          | none    => raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine scope.")
+        end
+    end
+  end,
+  insert(self, bind :: AC.Bind, scope :: IdentifierScope):
+    cases(IdentifierTable) self:
+      | identifier-table(table) =>
+        identifier-table(link(identifier(bind, scope), table))
+    end
+  end
+end
+
+fun mk-llvm-variable(bind :: AC.Bind, table :: IdentifierTable) -> K.ValueKind:
+  cases(IdentifierScope) table.lookup-scope(bind):
+    | LocalIdentifier  => K.LocalVariable
+    | GlobalIdentifier => K.GlobalVariable
+  end(bind.id)
 end
 
 fun get-symbols-lettable(expr :: AL.Lettable) -> Set<String>:
@@ -121,11 +164,11 @@ end
 word-star = K.Pointer(K.Integer(64), none)
 
 
-fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
+fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
   cases(AL.Lettable) l:
     | l-undefined => raise("l-undefined not handled")
     | l-update(table, field-name, value) => raise("l-update not handled")
-      table-id   = K.LocalVariable(table.id)
+      table-id   = mk-llvm-variable(table, identifiers)
       call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-insert"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty), 
         L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.id)), empty),
@@ -134,7 +177,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, adts :: Li
       H.pair(empty, call-op)
     | l-lookup(table, field-name) =>
       ### TODO: This needs more thinking
-      table-id   = K.LocalVariable(table.id)
+      table-id   = mk-llvm-variable(table, identifiers)
       result-id  = gensym("table-lookup-result-")
       call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-lookup"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty), 
@@ -143,7 +186,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, adts :: Li
       call-instr = L.Assign(result-id, call-op)
       H.pair(empty, call-op)
     | l-copy(table) =>
-      table-id   = K.LocalVariable(table.id)
+      table-id   = mk-llvm-variable(table, identifiers)
       result-id  = gensym("table-lookup-result-")
       call-op    = L.Call(false, L.CCC, K.Pointer(K.Integer(8), none), K.GlobalVariable("table-copy"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty)
@@ -153,8 +196,8 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, adts :: Li
     | l-box(id) => H.pair(empty, L.Alloca(double-word))
     | l-unbox(id) => raise("l-unbox not handled")
     | l-application(f, args) => 
-      H.pair(empty, L.Call(false, L.CCC, word-star, K.LocalVariable(f.id), for map(arg from args):
-        L.Argument(word-star, K.LocalVariable(arg), empty)
+      H.pair(empty, L.Call(false, L.CCC, word-star, mk-llvm-variable(f, identifiers), for map(arg from args):
+        L.Argument(word-star, mk-llvm-variable(arg, identifiers), empty)
       end, empty))
     | l-select(field, id, rep) => 
       select-suffix = gensym("-select-var")
@@ -167,7 +210,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, adts :: Li
   end
 end
 
-fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, adts :: List<AL.ADT>) -> List<L.Instruction>:
+fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> List<L.Instruction>:
   cases(AL.Expression) e:
     | l-switch(value, branches, default) => 
       case-label-suffix = gensym("-case-label")
@@ -189,17 +232,18 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, adts :: List
       end-label = L.Label("end" + case-label-suffix)
       link(switch-op, H.flatten(labeled-branches))
     | l-let(binding, exp, body) => 
-      cases(H.Pair) l-lettable-to-llvm(exp, symbols, adts):
+      updated-identifiers = identifiers.insert(binding, LocalIdentifier)
+      cases(H.Pair) l-lettable-to-llvm(exp, symbols, identifiers, adts):
         | pair(instrs, op) => 
-          instrs.append(link(L.Assign(binding.id, op), l-expr-to-llvm(body, symbols, adts)))
+          instrs.append(link(L.Assign(binding.id, op), l-expr-to-llvm(body, symbols, updated-identifiers, adts)))
       end
     | l-if(cond, consq, altern) =>
       if-suffix     = gensym("-if-label")
       consq-label   = "consq"  + if-suffix
       altern-label  = "altern" + if-suffix
       cond-split    = L.BrConditional(cond, consq-label, altern-label)
-      consq-branch  = link(L.Label(consq-label), l-expr-to-llvm(consq, symbols, adts))
-      altern-branch = link(L.Label(altern-label), l-expr-to-llvm(altern, symbols, adts))
+      consq-branch  = link(L.Label(consq-label), l-expr-to-llvm(consq, symbols, identifiers, adts))
+      altern-branch = link(L.Label(altern-label), l-expr-to-llvm(altern, symbols, identifiers, adts))
       end-label     = "end" + if-suffix
       link(cond-split, H.flatten(
         [
@@ -208,13 +252,14 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, adts :: List
           [L.Label(end-label)]
         ]))
     | l-assign(id) => raise("assignment not yet implemented")
-    | l-ret(id)    => [L.Ret(double-word, K.LocalVariable(id.id))]
+    | l-ret(id)    => [L.Ret(double-word, mk-llvm-variable(id, identifiers))]
   end
 end
 
 fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
   cases(AL.Program) prog:
     | l-prog(constants, procedures, adts) =>
+      # Build up the mappings from field names to numbers
       symbols = for fold(current from set([]), procedure from procedures):
         cases(AL.Procedure) procedure:
           | l-proc(_, _, _, body) => current.union(get-symbols-expr(body))
@@ -225,13 +270,24 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         count := count + 1
         field-symbol(symbol, count)
       end)
+      # Build up initial scope
+      proc-identifiers = for map(proc from procedures):
+        identifier(AC.c-bind(proc.name, A.a_blank), GlobalIdentifier)
+      end
+      constant-identifiers = for map(constant from constants):
+        identifier(AC.c-bind(constant.id, A.a_blank), GlobalIdentifier)
+      end
+      identifiers = identifier-table(proc-identifiers + constant-identifiers)
       L.Module(constants, for map(proc from procedures):
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body) =>
             arguments = for map(arg from args): 
               L.Parameter(arg.id, ann-to-type(arg.ann), [])
             end
-            L.Procedure(name, ann-to-type(ret), arguments, [], l-expr-to-llvm(body, symbol-table, adts))
+            func-identifiers = for fold(current from identifiers, arg from args):
+              current.insert(arg, LocalIdentifier)
+            end
+            L.Procedure(name, ann-to-type(ret), arguments, [], l-expr-to-llvm(body, symbol-table, func-identifiers, adts))
         end
       end)
   end
