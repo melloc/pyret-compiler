@@ -17,7 +17,7 @@ data HLettable:
     tosyn(self): "box " + self.id end
   | h-id(id :: AC.Bind) with:
     tosyn(self): self.id end # TODO something else? 
-  | h-unbox(id :: String) with: 
+  | h-unbox(id :: AC.Bind) with: 
     tosyn(self): "unbox " + self.id end
   | h-lam(f :: AC.Bind, closure :: AC.Bind)
   | h-app(f :: AC.Bind, args :: List<AC.Bind>) with:
@@ -45,7 +45,7 @@ data HExpr:
       self.bind.id + " : " + self.bind.ann + " = " + self.val.tosyn() 
         + "\n" + self.body.tosyn() 
     end
-  | h-assign(bind :: AC.Bind, val :: String, body :: HExpr) 
+  | h-assign(bind :: AC.Bind, val :: AC.Bind, body :: HExpr) 
   | h-try(body :: HExpr, bind :: AC.Bind, _except :: HExpr)
   | h-if(c :: AC.Bind, t :: HExpr, e :: HExpr)
   | h-cases(type :: A.Ann, val :: AC.Bind, branches :: List<HCasesBranch>, _else :: Option<HExpr>)

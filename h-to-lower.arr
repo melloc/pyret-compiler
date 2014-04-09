@@ -2,7 +2,9 @@
 
 provide *
 
-import "ast-h.arr" as AH
+import ast               as A
+import "ast-common.arr"  as AC
+import "ast-h.arr"       as AH
 import "ast-anf.arr"     as AN
 import "ast-lower.arr"   as AL
 import "helpers.arr"     as H
@@ -12,21 +14,31 @@ fun identity(a): a end
 fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression)) -> AL.Expression:
   cases(AH.HLettable) e:
     | h-undefined             => plug(AL.l-undefined)
-    | h-id(id)                => plug(AL.l-id(id))
+    | h-id(id)                => raise("There should be no h-id's left when converting to the lower AST!")
     | h-box(id)               => plug(AL.l-box(id))
     | h-unbox(id)             => plug(AL.l-unbox(id))
     | h-data(name, closure)   => raise("h-data not handled")
     | h-lam(f, closure)       => raise("h-lam not handled")
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
-      new-copy = gensym("table-copy")
-      updates  = fields.foldr(fun(field, next):
-        cases(AH.HField) field:
-          | h-field(field-name, value) =>
-            AL.l-seq(AL.l-update(new-copy, field-name, value), next)
-        end
-      end, plug(AL.l-id(new-copy)))
-      AL.l-let(new-copy, AL.l-copy("global.empty-table"), updates)
+      empty-table = AL.l-copy("global.empty-table")
+      cases(List<AH.HField>) fields:
+        | empty      => 
+          plug(empty-table)
+        | link(f, r) =>
+          new-copy = AC.c-bind(gensym("table-copy"), A.a_blank)
+          first-update = cases(AH.HField) f:
+            | h-field(field-name, value) => 
+              AL.l-update(new-copy, field-name, value)
+          end
+          updates  = r.foldr(fun(field, next):
+            cases(AH.HField) field:
+              | h-field(field-name, value) =>
+                AL.l-seq(AL.l-update(new-copy, field-name, value), next)
+            end
+          end, plug(first-update))
+          AL.l-let(new-copy, empty-table, updates)
+      end
     | h-update(table, fields) =>
       fields.foldr(fun(field, next):
         cases(AH.HField) field:
@@ -36,13 +48,22 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       end, plug(AL.l-undefined))
     | h-extend(table, fields) =>
       new-copy = gensym("table-copy")
-      updates  = fields.foldr(fun(field, next):
-        cases(AH.HField) field:
-          | h-field(field-name, value) =>
-            AL.l-seq(AL.l-update(new-copy, field-name, value), next)
-        end
-      end, plug(AL.l-id(new-copy)))
-      AL.l-let(new-copy, AL.l-copy(table), updates)
+      table-copy = AL.l-copy(table)
+      cases(List<HField>) fields:
+        | empty      => plug(table-copy)
+        | link(f, r) =>
+          first-update = cases(AH.HField) f:
+            | h-field(field-name, value) => 
+              AL.l-update(new-copy, field-name, value)
+          end
+          updates = r.foldr(fun(field, next):
+            cases(AH.HField) field:
+              | h-field(field-name, value) =>
+                AL.l-seq(AL.l-update(new-copy, field-name, value), next)
+            end
+          end, plug(first-update))
+          AL.l-let(new-copy, table-copy, updates)
+      end
     | h-dot(obj, field)       => plug(AL.l-lookup(obj, field))
     | h-colon(obj, field)     => plug(AL.l-lookup(obj, field))
     | h-get-bang(obj, field)  => plug(AL.l-lookup(obj, field))

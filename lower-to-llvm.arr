@@ -102,7 +102,6 @@ fun get-symbols-lettable(expr :: AL.Lettable) -> Set<String>:
     | l-update(table, field-name, value) => set([field-name.id])
     | l-lookup(table, field-name)        => set([field-name.id])
     | l-copy(table)                      => empty-set
-    | l-id(id)                           => empty-set
     | l-box(id)                          => empty-set
     | l-unbox(id)                        => empty-set
     | l-application(f, args)             => empty-set
@@ -192,7 +191,6 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty)
       ], empty)
       H.pair(empty, call-op)
-    | l-id(id) => H.pair(empty, L.Invalid)
     | l-box(id) => H.pair(empty, L.Alloca(double-word))
     | l-unbox(id) => raise("l-unbox not handled")
     | l-application(f, args) => 
@@ -256,6 +254,14 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
   end
 end
 
+library = [
+  identifier(AC.c-bind("rational-plus-method", A.a_blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-minus-method", A.a_blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-times-method", A.a_blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-divide-method", A.a_blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-equals-method", A.a_blank), GlobalIdentifier)
+]
+
 fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
   cases(AL.Program) prog:
     | l-prog(constants, procedures, adts) =>
@@ -277,7 +283,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       constant-identifiers = for map(constant from constants):
         identifier(AC.c-bind(constant.id, A.a_blank), GlobalIdentifier)
       end
-      identifiers = identifier-table(proc-identifiers + constant-identifiers)
+      identifiers = identifier-table(library + proc-identifiers + constant-identifiers)
       L.Module(constants, for map(proc from procedures):
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body) =>

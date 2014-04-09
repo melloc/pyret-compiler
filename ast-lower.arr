@@ -121,7 +121,6 @@ data Lettable:
   | l-update(table :: AC.Bind, field-name :: AC.Bind, value :: String)
   | l-lookup(table :: AC.Bind, field-name :: AC.Bind)
   | l-copy(table :: AC.Bind)
-  | l-id(id :: AC.Bind)
   | l-box(id :: AC.Bind)
   | l-unbox(id :: AC.Bind)
 end
@@ -134,7 +133,7 @@ data Expression:
   | l-switch(value :: AC.Bind, branches :: List<Branch>, default :: Option<Expression>)
   | l-let(binding :: AC.Bind, e :: Lettable, body :: Expression)
   | l-seq(e :: Lettable, body :: Expression)
-  | l-assign(binding :: AC.Bind, val :: String, body :: Expression)
+  | l-assign(binding :: AC.Bind, val :: AC.Bind, body :: Expression)
   | l-if(cond :: AC.Bind, consq :: Expression, altern :: Expression)
   | l-ret(id :: AC.Bind)
 end
