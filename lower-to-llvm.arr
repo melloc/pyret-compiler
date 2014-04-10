@@ -99,8 +99,8 @@ end
 fun get-symbols-lettable(expr :: AL.Lettable) -> Set<String>:
   cases(AL.Lettable) expr:
     | l-undefined                        => empty-set
-    | l-update(table, field-name, value) => set([field-name.id])
-    | l-lookup(table, field-name)        => set([field-name.id])
+    | l-update(table, field-name, value) => set([field-name.name])
+    | l-lookup(table, field-name)        => set([field-name.name])
     | l-copy(table)                      => empty-set
     | l-box(id)                          => empty-set
     | l-unbox(id)                        => empty-set
@@ -157,7 +157,7 @@ end
 
 
 fun exit-to(instrs :: List<L.Instruction>, label :: String) -> List<L.Instruction>:
-  instrs.append(L.BrUnconditional(label))
+  instrs.append([L.BrUnconditional(label)])
 end
 
 word-star = K.Pointer(K.Integer(64), none)
@@ -166,11 +166,11 @@ word-star = K.Pointer(K.Integer(64), none)
 fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
   cases(AL.Lettable) l:
     | l-undefined => raise("l-undefined not handled")
-    | l-update(table, field-name, value) => raise("l-update not handled")
+    | l-update(table, field-name, value) =>
       table-id   = mk-llvm-variable(table, identifiers)
       call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-insert"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty), 
-        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.id)), empty),
+        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty),
         L.Argument(K.Integer(64), K.ConstantInt(value), empty)
       ], empty)
       H.pair(empty, call-op)
@@ -180,7 +180,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       result-id  = gensym("table-lookup-result-")
       call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-lookup"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty), 
-        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.id)), empty)
+        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty)
       ], empty)
       call-instr = L.Assign(result-id, call-op)
       H.pair(empty, call-op)
@@ -239,7 +239,7 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
       if-suffix     = gensym("-if-label")
       consq-label   = "consq"  + if-suffix
       altern-label  = "altern" + if-suffix
-      cond-split    = L.BrConditional(cond, consq-label, altern-label)
+      cond-split    = L.BrConditional(cond.id, consq-label, altern-label)
       consq-branch  = link(L.Label(consq-label), l-expr-to-llvm(consq, symbols, identifiers, adts))
       altern-branch = link(L.Label(altern-label), l-expr-to-llvm(altern, symbols, identifiers, adts))
       end-label     = "end" + if-suffix

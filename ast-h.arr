@@ -25,11 +25,9 @@ data HLettable:
   | h-obj(fields :: List<HField>)
   | h-update(super :: AC.Bind, fields :: List<HField>)
   | h-extend(super :: AC.Bind, fields :: List<HField>) # TODO merge?
-  | h-dot(obj :: AC.Bind, field :: AC.Bind)
-  | h-colon(obj :: AC.Bind, field :: AC.Bind)
-  | h-get-bang(obj :: AC.Bind, field :: AC.Bind) # more?
-  | h-closure(fields :: List<HField>)
-  | h-closure-lookup(closure :: String, field :: String)
+  | h-dot(obj :: AC.Bind, field :: AC.Field)
+  | h-colon(obj :: AC.Bind, field :: AC.Field)
+  | h-get-bang(obj :: AC.Bind, field :: AC.Field) # more?
 end
 
 data HCasesBranch:
@@ -45,7 +43,7 @@ data HExpr:
       self.bind.id + " : " + self.bind.ann + " = " + self.val.tosyn() 
         + "\n" + self.body.tosyn() 
     end
-  | h-assign(bind :: AC.Bind, val :: AC.Bind, body :: HExpr) 
+  | h-assign(bind :: AC.Bind, val :: AC.Bind, body :: HExpr)
   | h-try(body :: HExpr, bind :: AC.Bind, _except :: HExpr)
   | h-if(c :: AC.Bind, t :: HExpr, e :: HExpr)
   | h-cases(type :: A.Ann, val :: AC.Bind, branches :: List<HCasesBranch>, _else :: Option<HExpr>)
@@ -61,7 +59,7 @@ data HVariant:
 end
 
 data HField:
-  h-field(name :: String, value :: String)
+  h-field(name :: AC.Field, value :: AC.Bind)
 end
 # The value of a field can be a string, since we lift the lookup out 
 # beforehand. If that lookup is in fact just an id, we will substitute

@@ -17,3 +17,7 @@ sharing:
     end
   end
 end
+
+data Field:
+  | c-field-name(name :: String)
+end

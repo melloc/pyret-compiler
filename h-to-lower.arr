@@ -17,11 +17,10 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-id(id)                => raise("There should be no h-id's left when converting to the lower AST!")
     | h-box(id)               => plug(AL.l-box(id))
     | h-unbox(id)             => plug(AL.l-unbox(id))
-    | h-data(name, closure)   => raise("h-data not handled")
     | h-lam(f, closure)       => raise("h-lam not handled")
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
-      empty-table = AL.l-copy("global.empty-table")
+      empty-table = AL.l-copy(AC.c-bind("global.empty-table", A.a_blank))
       cases(List<AH.HField>) fields:
         | empty      => 
           plug(empty-table)
