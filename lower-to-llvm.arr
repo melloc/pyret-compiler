@@ -117,7 +117,7 @@ fun get-symbols-expr(expr :: AL.Expression) -> Set<String>:
         | none    => empty-set
       end
       for fold(current from default-symbols, branch from branches):
-        branch-symbols = get-symbols-expr(branch)
+        branch-symbols = get-symbols-expr(branch.body)
         default-symbols.union(branch-symbols)
       end
     | l-let(binding, exp, body) =>
@@ -128,7 +128,8 @@ fun get-symbols-expr(expr :: AL.Expression) -> Set<String>:
       consq-symbols  = get-symbols-expr(consq)
       altern-symbols = get-symbols-expr(altern)
       consq-symbols.union(altern-symbols)
-    | l-assign(id) => empty-set
+    | l-assign(id, val, body) =>
+      get-symbols-expr(body)
     | l-ret(id)    => empty-set
   end
 end

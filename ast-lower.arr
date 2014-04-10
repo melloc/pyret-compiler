@@ -126,7 +126,7 @@ data Lettable:
 end
 
 data Branch:
-  | l-branch(constructor :: ConRep, code :: Expression)
+  | l-branch(constructor :: ConRep, body :: Expression)
 end
 
 data Expression:

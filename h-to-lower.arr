@@ -102,7 +102,7 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
         | some(else-hexpr) => some(h-expr-to-lower(else-hexpr, adts, identity))
         | none    => none
       end
-      plug(AL.l-switch(val, branches, lower-else))
+      plug(AL.l-switch(val, lower-branches, lower-else))
   end
 end
 

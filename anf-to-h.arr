@@ -197,7 +197,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           # There will be no need to substitute into the left-hand side
           # of an assign expression. 
           AH.h-assign(bind, 
-                      lookup-in-subst(val, subs), # TODO right?
+                      lookup-in-subst(val.id, subs), # TODO right?
                       filter-lets-expr(body, subs, scope))
       | h-try(body, bind, _except) => 
           # TODO I think we do need to replace "bind".
