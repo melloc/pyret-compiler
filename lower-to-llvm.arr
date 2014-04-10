@@ -250,7 +250,7 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
           exit-to(altern-branch, end-label),
           [L.Label(end-label)]
         ]))
-    | l-assign(id) => raise("assignment not yet implemented")
+    | l-assign(id, val, body) => raise("assignment not yet implemented")
     | l-ret(id)    => [L.Ret(double-word, mk-llvm-variable(id, identifiers))]
   end
 end

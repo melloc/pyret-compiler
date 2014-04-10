@@ -220,7 +220,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           AH.h-cases-branch(branch.name, branch.args, filter-lets-expr(branch.body, subs, scope))
         end
         _else-filtered = cases(Option<AH.HExpr>) _else:
-          | some(e) => filter-lets-expr(e, subs, scope)
+          | some(e) => some(filter-lets-expr(e, subs, scope))
           | none    => none
         end
         AH.h-cases(type, new-val, branches-filtered, _else-filtered)
@@ -332,9 +332,10 @@ fun let-lettable(bind :: AC.Bind,
     cases (List<AField>) fields:
       | link(f, r) => 
           tmp-bind = AC.c-bind(next-val(), A.a_blank)
+          field-name = AC.c-field-name(f.name)
           AH.h-let(tmp-bind,
                 aval-h(f.value, vs), 
-                obj-fold(r, link(AH.h-field(f.name, tmp-bind), done), finish))
+                obj-fold(r, link(AH.h-field(field-name, tmp-bind), done), finish))
       | empty => 
           # TODO reversing the list should not matter. 
           # I am just putting it there for reassurance. 
@@ -664,7 +665,6 @@ fun anf-to-h(prog :: N.AProg):
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))
-        print(funcs)
         {nums : nums,
          strings : strings,
          datas : datas,
