@@ -19,7 +19,8 @@ builtin-functions = [
     "rational-minus-method", 
     "rational-times-method", 
     "rational-divide-method",
-    "rational-equals-method"
+    "rational-equals-method",
+    "rational-lte-method"
 ]
     
 
