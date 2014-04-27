@@ -11,7 +11,7 @@ import "fcmp.arr" as F
 import "../helpers.arr" as H
 
 data ModuleBlock:
-  | Module(constants :: List<Constant>, procedures :: List<ProcedureBlock>)
+  | Module(constants :: List<Global>, procedures :: List<ProcedureBlock>)
 sharing:
   tostring(self) -> String:
     cases(ModuleBlock) self:
@@ -73,7 +73,7 @@ sharing:
           + for map(instruction from instructions):
               instruction.tostring()
             end.join-str("\n")
-          + "}\n"
+          + "\n}\n"
     end
   end
 end
@@ -103,6 +103,18 @@ sharing:
   end
 end
 
+data StorageClass:
+  | DLLImport
+  | DLLExport
+sharing:
+  tostring(self) -> String:
+    cases(StorageClass) self:
+      | DLLImport           => "dllimport"
+      | DLLExport           => "dllexport"
+    end
+  end
+end
+
 data Linkage:
   | External
   | AvailableExternally
@@ -114,8 +126,6 @@ data Linkage:
   | Appending
   | Internal
   | Private
-  | DLLImport
-  | DLLExport
   | ExternalWeak
   | Common
   | LinkerPrivate
@@ -133,8 +143,6 @@ sharing:
       | Appending           => "appending"
       | Internal            => "internal"
       | Private             => "private"
-      | DLLImport           => "dllimport"
-      | DLLExport           => "dllexport"
       | ExternalWeak        => "extern_weak"
       | Common              => "common"
       | LinkerPrivate       => "linker_private"
@@ -395,8 +403,14 @@ data OpCode:
   | ExtractElement
   | InsertElement
   | ShuffleVector
-  | ExtractValue(agtyp :: K.TypeKind, val :: K.ValueKind, idxs :: List) # TODO
-  | InsertValue
+  | ExtractValue(aggtyp :: K.TypeKind,
+                 val :: K.ValueKind,
+                 idxs :: List<Number>)
+  | InsertValue(aggtyp :: K.TypeKind,
+                val :: K.ValueKind,
+                eltty :: K.TypeKind,
+                elt :: K.ValueKind,
+                idxs :: List<Number>)
   | Fence
   | AtomicCmpXchg
   | AtomicRMW
@@ -543,8 +557,19 @@ sharing:
       | ExtractElement =>
       | InsertElement  =>
       | ShuffleVector  =>
-      | ExtractValue(agtyp, val, idxs)  =>
-      | InsertValue    =>
+      | ExtractValue(aggtyp, val, idxs) =>
+        "extractvalue " 
+          + aggtyp.tostring() + " " + val.tostring() + ", " 
+          + for map(idx from idxs):
+              idx.tostring()
+            end.join-str(", ")
+      | InsertValue(aggtyp, val, eltty, elt, idxs) =>
+        "insertvalue " 
+          + aggtyp.tostring() + " " + val.tostring() + ", " 
+          + eltty.tostring() + " " + elt.tostring() + ", " 
+          + for map(idx from idxs):
+              idx.tostring()
+            end.join-str(", ")
       | Fence          =>
       | AtomicCmpXchg  =>
       | AtomicRMW      =>
@@ -583,22 +608,29 @@ data GlobalMode:
 end
 
 data Global:
-  | GlobalDecl(var-name     :: String,
-               linkage      :: Linkage,
-               visibility   :: Visibility,
-               storage-class,
-               thread-local :: ThreadLocalMode,
-               mode         :: GlobalMode,
-               ty           :: K.TypeKind,
-               section      :: Option<String>,
-               align        :: Option<Number>)
+  | GlobalDecl(var-name      :: String,
+               linkage       :: Linkage,
+               visibility    :: Visibility,
+               storage-class :: Option<StorageClass>,
+               thread-local  :: Option<ThreadLocalMode>,
+               mode          :: GlobalMode,
+               ty            :: K.TypeKind,
+               section       :: Option<String>,
+               align         :: Option<Number>)
 sharing:
   tostring(self) -> String:
     cases(Global) self:
       | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local,
                    mode, ty, section, align) =>
-        "@" + var-name + " = " + linkage.tostring() + " " + storage-class.tostring()
-          + thread-local.tostring()
+        "@" + var-name + " = " + linkage.tostring() + " " 
+          + cases(Option<StorageClass>) storage-class:
+              | some(sc) => sc.tostring()
+              | none     => ""
+            end
+          + cases(Option<ThreadLocalMode>) thread-local:
+              | some(t)  => t.tostring()
+              | none     => ""
+            end
           + cases(GlobalMode) mode:
               | GlobalConstant(value) => "constant " + ty.tostring() + " " + value.tostring()
               | GlobalVariable        => "global " + ty.tostring()

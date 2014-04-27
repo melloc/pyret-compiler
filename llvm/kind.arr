@@ -91,6 +91,7 @@ data ValueKind:
   | BlockAddress(function-name :: String, block-name :: String)
   | ConstantAggregateZero
   | ConstantArray(ty :: TypeKind, values :: List<ValueKind>)
+  | ConstantString(value :: String)
   | ConstantDataArray
   | ConstantDataVector
   | ConstantExpr
@@ -123,6 +124,8 @@ sharing:
                ty.tostring() + " " + value.tostring() 
             end.join(", ")
           + " ]"
+      | ConstantString(val) =>
+        "c\"" + val + "\00\""
       | ConstantDataArray  =>
       | ConstantDataVector =>
       | ConstantExpr =>
