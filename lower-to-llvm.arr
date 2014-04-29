@@ -127,7 +127,7 @@ fun ann-to-type(type :: T.Type) -> K.TypeKind:
     cases(T.Type) type:
       | t-blank =>
         struct-pyret-value
-      | t_any   =>
+      | t-any   =>
         struct-pyret-value
       | t-name(id)           =>
         struct-pyret-value
@@ -145,6 +145,16 @@ fun ann-to-type(type :: T.Type) -> K.TypeKind:
             | t-field(_, name, ann) => K.TypeField(name, ann-to-type(ann))
           end
         end, false)
+      | t-void        =>
+        K.Void
+      | t-byte        =>
+        K.Integer(8)
+      | t-word        =>
+        K.Integer(32)
+      | t-number      =>
+        struct-pyret-value
+      | t-pointer(ty) =>
+        K.Pointer(ann-to-type(ty))
     end
 end
 
@@ -268,6 +278,11 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
         | pair(instrs, op) => 
           instrs.append(link(L.Assign(binding.id, op), l-expr-to-llvm(body, symbols, updated-identifiers, adts)))
       end
+    | l-seq(exp, body) =>
+      cases(H.Pair) l-lettable-to-llvm(exp, symbols, identifiers, adts):
+        | pair(instrs, op) => 
+          instrs.append(link(L.NoAssign(op), l-expr-to-llvm(body, symbols, identifiers, adts)))
+      end
     | l-if(cond, consq, altern) =>
       if-suffix     = gensym("-if-label")
       consq-label   = "consq"  + if-suffix
@@ -293,6 +308,7 @@ library = [
   identifier(AC.c-bind("rational-times-method", T.t-blank), GlobalIdentifier),
   identifier(AC.c-bind("rational-divide-method", T.t-blank), GlobalIdentifier),
   identifier(AC.c-bind("rational-equals-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-lte-method", T.t-blank), GlobalIdentifier),
   identifier(AC.c-bind("global.empty-table", T.t-blank), GlobalIdentifier)
 ]
 

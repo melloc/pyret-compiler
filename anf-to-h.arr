@@ -601,6 +601,9 @@ end
 # decision that can be made later, since it will require moving only a few 
 # lines of code. 
 fun anf-to-h(prog :: N.AProg):  
+  funcs := []
+  datas := []
+  globals := []
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))

@@ -150,7 +150,6 @@ fun h-to-lower(prog) -> AL.Program:
   adts = for map(adt from prog.datas):
     h-adt-to-lower(adt)
   end
-  print(prog.funcs)
   procs = for map(func from prog.funcs):
     h-proc-to-lower(func, adts)
   end

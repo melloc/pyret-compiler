@@ -257,9 +257,9 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
       N.a-let(l, AC.c-bind-loc(l, name, T.t-blank), a-fun,
                 k(N.a-val(N.a-id(l, name))))
     | s_lam(l, params, args, ret, doc, body, _) =>
-      k(N.a-lam(l, args.map(fun(b): bind(b) end), ret, anf-term(body)))
+      k(N.a-lam(l, args.map(fun(b): bind(b) end), T.ann-to-type(ret), anf-term(body)))
     | s_method(l, args, ret, doc, body, _) =>
-      k(N.a-method(l, args.map(fun(b): bind(b) end), ret, anf-term(body)))
+      k(N.a-method(l, args.map(fun(b): bind(b) end), T.ann-to-type(ret), anf-term(body)))
 
     | s_app(l, f, args) =>
       anf-name(f, "anf_fun", fun(v):
