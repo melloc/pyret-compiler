@@ -3,6 +3,7 @@
 provide *
 import file as F
 import ast as A
+import "types.arr" as T
 import "ast-common.arr" as AC
 import "ast-anf.arr" as N
 import "ast-h.arr" as AH
@@ -40,34 +41,19 @@ next-scope = (fun():
   end
 end)()
 
-next-func-name = (fun():
-  var n = 0
-  fun() -> String: 
-    n := n + 1
-    "func.p" + n.tostring()
-  end
-end)()
-
-next-string-name = (fun():
-  var n = 0
-  fun() -> String:
-    n := n + 1
-    "str.p" + n.tostring()
-  end
-end)()
-
-num-prefix = "num.v"
-
+num-len = 10
 num-id-prefix = "num.p"
+fun number-identifier(n :: Number):
+    num-id-prefix + n.tostring-fixed(num-len)
+end
+
 string-id-prefix = "str.p"
 bool-id-true = "bool.p-true"
 bool-id-false = "bool.p-false"
 
-closure-arg-bind = AC.c-bind("closure.p", A.a_blank)
 closure-field    = AC.c-field-name("closure.f")
 funcptr-field    = AC.c-field-name("funcptr.f")
 
-num-len = 10
 
 default-loc = A.loc("N/A", -1, -1)
 
@@ -76,8 +62,7 @@ default-loc = A.loc("N/A", -1, -1)
 ###################
 
 var datas = []
-var nums = []
-var strings = []
+var globals :: List<AC.Global> = []
 var funcs = []
 
 
@@ -94,22 +79,22 @@ end
 fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
 
   # TODO make sure this function will work
-  fun lookup-in-subst(s :: String, subs :: List<Subst>) -> AC.Bind:
+  fun lookup-in-subst(s :: AC.Bind, subs :: List<Subst>) -> AC.Bind:
     cases (List<Subst>) subs: 
-      | link(f, r) => if f.id == s: f.val else: lookup-in-subst(s, r) end
-      | empty => AC.c-bind(s, A.a_blank)
+      | link(f, r) => if f.id == s.id: f.val else: lookup-in-subst(s, r) end
+      | empty => s
     end
   end
 
   fun filter-lets-field(field :: AH.HField, subs :: List<Subst>) -> AH.HField:
-    AH.h-field(field.name, lookup-in-subst(field.value.id, subs))
+    AH.h-field(field.name, lookup-in-subst(field.value, subs))
   end
 
   fun filter-lets-lettable(expr :: AH.HLettable, 
                            subs :: List<Subst>) -> AH.HLettable:
     cases (AH.HLettable) expr:
-      | h-id(bind) => AH.h-id(lookup-in-subst(bind.id, subs))
-      | h-box(bind) => AH.h-box(lookup-in-subst(bind.id, subs))
+      | h-id(bind) => AH.h-id(lookup-in-subst(bind, subs))
+      | h-box(bind) => AH.h-box(lookup-in-subst(bind, subs))
       | h-unbox(bind) => AH.h-unbox(bind)
       | h-lam(f, closure) =>
           # TODO this code will need to be updated. How do we do filtering
@@ -141,22 +126,22 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           funcs := handle-func-vs(funcs)
           AH.h-lam(f, closure)
       | h-app(f, args) => 
-          AH.h-app(lookup-in-subst(f.id, subs), 
-                for map(arg from args): lookup-in-subst(arg.id, subs) end)
+          AH.h-app(lookup-in-subst(f, subs), 
+                for map(arg from args): lookup-in-subst(arg, subs) end)
       | h-obj(fields) => 
           AH.h-obj(for map(f from fields): filter-lets-field(f, subs) end)
-      | h-update(super, fields) => 
-          AH.h-update(lookup-in-subst(super.id, subs), 
+      | h-update(obj, fields) => 
+          AH.h-update(lookup-in-subst(obj, subs), 
                    for map(f from fields): filter-lets-field(f, subs) end)
-      | h-extend(super, fields) => 
-          AH.h-extend(lookup-in-subst(super.id, subs), 
+      | h-extend(obj, fields) => 
+          AH.h-extend(lookup-in-subst(obj, subs), 
                    for map(f from fields): filter-lets-field(f, subs) end)
       | h-dot(obj, field) => 
-          AH.h-dot(lookup-in-subst(obj.id, subs), field)
+          AH.h-dot(lookup-in-subst(obj, subs), field)
       | h-colon(obj, field) => 
-          AH.h-colon(lookup-in-subst(obj.id, subs), field)
+          AH.h-colon(lookup-in-subst(obj, subs), field)
       | h-get-bang(obj, field) => 
-          AH.h-get-bang(lookup-in-subst(obj.id, subs), field)
+          AH.h-get-bang(lookup-in-subst(obj, subs), field)
       | else => expr 
     end
   end
@@ -165,29 +150,17 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
                        subs :: List<Subst>,
                        scope :: String) -> AH.HExpr:
     cases (AH.HExpr) expr: 
-      | h-ret(bind) => AH.h-ret(lookup-in-subst(bind.id, subs))
+      | h-ret(bind) => AH.h-ret(lookup-in-subst(bind, subs))
       | h-let(bind, val, body) =>
           # TODO update this branch
           nval = filter-lets-lettable(val, subs)
           # TODO TODO TODO nval needs to be a type check. Function call?
           cases (AH.HLettable) nval:
             | h-id(id) => 
-            #    if (bind.ann == A.a_any) or (bind.ann == A.a_blank):
                 filter-lets-expr(body, 
                                  link(let-sub(bind.id, id), 
                                       subs), 
                                  scope)
-           #     else:
-          #        new-id = scope + bind.id
-         #         new-bind = bind.rename(new-id) # TODO right?
-        #          AH.h-let(new-bind, 
-       #                 nval, 
-      #                  filter-lets-expr(body, 
-     #                                    link(let-sub(bind.id, new-bind), 
-    #                                          subs), 
-   #                                      scope))
-                        # TODO check all of this twice. 
-                #end
             | else => 
                 AH.h-let(bind, nval, filter-lets-expr(body, subs, scope))
           end
@@ -198,7 +171,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
           # There will be no need to substitute into the left-hand side
           # of an assign expression. 
           AH.h-assign(bind, 
-                      lookup-in-subst(val.id, subs), # TODO right?
+                      lookup-in-subst(val, subs), # TODO right?
                       filter-lets-expr(body, subs, scope))
       | h-try(body, bind, _except) => 
           # TODO I think we do need to replace "bind".
@@ -211,12 +184,12 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
                                       subs), 
                                  next-scope()))
       | h-if(c, t, e) => 
-          newcond = lookup-in-subst(c.id, subs)
+          newcond = lookup-in-subst(c, subs)
           AH.h-if(newcond, 
                filter-lets-expr(t, subs, next-scope()), 
                filter-lets-expr(e, subs, next-scope()))
       | h-cases(type, val, branches, _else) =>
-        new-val = lookup-in-subst(val.id, subs)
+        new-val = lookup-in-subst(val, subs)
         branches-filtered = for map(branch from branches):
           AH.h-cases-branch(branch.name, branch.args, filter-lets-expr(branch.body, subs, scope))
         end
@@ -232,7 +205,7 @@ fun filter-lets(prog :: AH.HExpr) -> AH.HExpr:
 where:
   filter-lets(AH.h-ret("tmp")) is AH.h-ret("tmp")
   filter-lets(
-      AH.h-let(AC.c-bind-loc(error.location("", -1, -1), "x", A.a_blank), 
+      AH.h-let(AC.c-bind-loc(error.location("", -1, -1), "x", T.t-blank), 
             AH.h-id("tmp"), 
             AH.h-ret("x"))
     ) is AH.h-ret("tmp")
@@ -240,8 +213,8 @@ end
 
 fun filter-func(func :: AH.NamedFunc) -> AH.NamedFunc:
   cases(AH.NamedFunc) func:
-    | named-func(name, args, body, ret) =>
-      AH.named-func(name, args, filter-lets(body), ret)
+    | named-func(name, args, body, ret, is-closure) =>
+      AH.named-func(name, args, filter-lets(body), ret, is-closure)
   end
 end
 
@@ -303,10 +276,10 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
             s.union(check-merge(arg.id, already))
           end
       | h-obj(fields) => gfv-fields(fields, already)
-      | h-update(super, fields) => 
-          check-merge(super.id, already).union(gfv-fields(fields, already))
-      | h-extend(super, fields) => 
-          check-merge(super.id, already).union(gfv-fields(fields, already))
+      | h-update(obj, fields) => 
+          check-merge(obj.id, already).union(gfv-fields(fields, already))
+      | h-extend(obj, fields) => 
+          check-merge(obj.id, already).union(gfv-fields(fields, already))
       | h-dot(obj, field) => check-merge(obj.id, already)
       | h-colon(obj, field) => check-merge(obj.id, already)
       | h-get-bang(obj, field) => check-merge(obj.id, already)
@@ -332,7 +305,7 @@ fun let-lettable(bind :: AC.Bind,
                finish :: (List<AH.HField> -> AH.HLettable)) -> AH.HExpr:
     cases (List<AField>) fields:
       | link(f, r) => 
-          tmp-bind = AC.c-bind(next-val(), A.a_blank)
+          tmp-bind = AC.c-bind(next-val(), T.t-blank)
           field-name = AC.c-field-name(f.name)
           AH.h-let(tmp-bind,
                 aval-h(f.value, vs), 
@@ -350,7 +323,7 @@ fun let-lettable(bind :: AC.Bind,
                finish :: (List<AC.Bind> -> AH.HLettable)) -> AH.HExpr:
     cases (List<AVal>) args:
       | link(f, r) => 
-          tmp-bind = AC.c-bind(next-val(), A.a_blank)
+          tmp-bind = AC.c-bind(next-val(), T.t-blank)
           AH.h-let(tmp-bind,
                 aval-h(f, vs),
                 app-fold(r, link(tmp-bind, done), finish))
@@ -372,7 +345,7 @@ fun let-lettable(bind :: AC.Bind,
           var vvals = []
           vfields = for map(wm from dv.with-members):
             tmp = next-val()
-            tmp-bind = AC.c-bind(tmp, A.a_blank)
+            tmp-bind = AC.c-bind(tmp, T.t-blank)
             vtmps := [tmp] + vtmps
             vvals := [aval-h(wm.value, vs)] + vvals
             AH.h-field(AC.c-field-name(wm.name), tmp-bind)
@@ -405,7 +378,7 @@ fun let-lettable(bind :: AC.Bind,
                             dvals :: List<AH.HLettable>,
                             body :: N.AExpr) -> AH.HExpr:
           cases (List<String>) dvars: 
-            | link(f, r) => AH.h-let(AC.c-bind(f, A.a_blank),
+            | link(f, r) => AH.h-let(AC.c-bind(f, T.t-blank),
                                   dvals.first, 
                                   do-let-bindings(r, dvals.rest, body))
             | empty => aexpr-h(body, vs, binds)
@@ -426,21 +399,9 @@ fun let-lettable(bind :: AC.Bind,
         value = aval-h(f, vs)
         cases(AH.HLettable) value:
           | h-id(id) =>
-            if builtin-functions.member(id.id):
-              app-fold(args, empty, fun(fargs :: List<AC.Bind>) -> AH.HLettable:
-                AH.h-app(id, fargs)
-              end)
-            else:
-              tmp = AC.c-bind(next-val(), A.a_blank)
-              tmp-closure = AC.c-bind(next-val(), A.a_blank)
-              tmp-func = AC.c-bind(next-val(), A.a_blank)
-              app = app-fold(args, empty, fun(fargs :: List<AC.Bind>) -> AH.HLettable:
-                AH.h-app(tmp-func, link(tmp-closure, fargs))
-              end)
-              AH.h-let(tmp, value, 
-                AH.h-let(tmp-closure, AH.h-dot(tmp, closure-field),
-                  AH.h-let(tmp-func, AH.h-dot(tmp, funcptr-field), app)))
-            end
+            app-fold(args, empty, fun(fargs :: List<AC.Bind>) -> AH.HLettable:
+              AH.h-app(id, fargs)
+            end)
           | else     =>
             raise("Applying something that isn't an ID? This doesn't seem right....")
         end
@@ -448,103 +409,80 @@ fun let-lettable(bind :: AC.Bind,
         raise("Congratulations! You've created an a-help-app!")
     | a-obj(l, fields) => 
         obj-fold(fields, empty, AH.h-obj)
-    | a-update(l, super, fields) => 
+    | a-update(l, obj, fields) => 
         tmp = next-val()
-        AH.h-let(AC.c-bind(tmp, A.a_blank),
-                 aval-h(super, vs),
+        AH.h-let(AC.c-bind(tmp, T.t-blank),
+                 aval-h(obj, vs),
                  obj-fold(fields, 
                           empty, 
                           fun(flds :: List<AH.HField>) -> AH.HLettable:
-                            AH.h-update(AC.c-bind(tmp, A.a_blank), flds)
+                            AH.h-update(AC.c-bind(tmp, T.t-blank), flds)
                           end))
-    | a-extend(l, super, fields) => 
+    | a-extend(l, obj, fields) => 
         tmp = next-val()
-        AH.h-let(AC.c-bind(tmp, A.a_blank),
-                 aval-h(super, vs),
+        AH.h-let(AC.c-bind(tmp, T.t-blank),
+                 aval-h(obj, vs),
                  obj-fold(fields, 
                           empty, 
                           fun(flds :: List<AH.HField>) -> AH.HLettable:
-                            AH.h-extend(AC.c-bind(tmp, A.a_blank), flds)
+                            AH.h-extend(AC.c-bind(tmp, T.t-blank), flds)
                           end))
     | a-dot(l, obj, field) => 
         tmp = next-val()
-        AH.h-let(AC.c-bind(tmp, A.a_blank), 
+        AH.h-let(AC.c-bind(tmp, T.t-blank), 
                  aval-h(obj, vs), 
                  AH.h-let(bind, 
-                          AH.h-dot(AC.c-bind(tmp, A.a_blank), 
+                          AH.h-dot(AC.c-bind(tmp, T.t-blank), 
                                    AC.c-field-name(field)), 
                           aexpr-h(b, vs, binds)))
     | a-colon(l, obj, field) =>
         tmp = next-val()
-        AH.h-let(AC.c-bind(tmp, A.a_blank),
+        AH.h-let(AC.c-bind(tmp, T.t-blank),
                  aval-h(obj, vs),
                  AH.h-let(bind, 
-                          AH.h-colon(AC.c-bind(tmp, A.a_blank), 
+                          AH.h-colon(AC.c-bind(tmp, T.t-blank), 
                                      AC.c-field-name(field)), 
                           aexpr-h(b, vs, binds)))
     | a-get-bang(l, obj, field) => 
         tmp = next-val()
-        AH.h-let(AC.c-bind(tmp, A.a_blank),
+        AH.h-let(AC.c-bind(tmp, T.t-blank),
                  aval-h(obj, vs),
                  AH.h-let(bind, 
-                          AH.h-get-bang(AC.c-bind(tmp, A.a_blank), 
+                          AH.h-get-bang(AC.c-bind(tmp, T.t-blank), 
                                         AC.c-field-name(field)), 
                           aexpr-h(b, vs, binds)))
     | a-lam(l, args, ret, body) =>
-        name = next-func-name()
+        name = gensym("func." + bind.id)
+        name-bind = AC.c-bind-loc(l, name, T.t-blank)
         fbody = aexpr-h(body, vs, binds)
-		fvars = get-free-vars(fbody, 
+
+        # Determine if closure
+		fvars = get-free-vars(fbody,
                               set(for map(a from args):
                                     a.id
                                   end + builtin-functions)).to-list()
-        funcs := link(
-          AH.named-func(name, 
-                     [closure-arg-bind] + args, 
-                     for fold(base from fbody, vid from fvars):
-                       AH.h-let(AC.c-bind(vid, A.a_blank),
-                             AH.h-dot(closure-arg-bind, AC.c-field-name(vid)),
-                             base)
-                     end, ret),
-          funcs
-        )
+        is-closure = fvars.length() <> 0
 
-		tmp = AC.c-bind(next-val(), A.a_blank)
-        name-bind = AC.c-bind-loc(l, name, A.a_blank)
-		AH.h-let(tmp,
-              AH.h-obj(for map(vid from fvars): 
-                field-name  = AC.c-field-name(vid)
-                field-value = AC.c-bind(vid, A.a_blank)
-                AH.h-field(field-name, field-value) 
-              end),
-			  AH.h-let(bind, AH.h-lam(name-bind, tmp), aexpr-h(b, vs, binds)))
+        # Lift procedure
+        func = AH.named-func(name, args, fbody, ret, is-closure)
+        funcs := link(func, funcs)
+        if (is-closure):
+          AH.h-let(bind, AH.h-id(name-bind), aexpr-h(b, vs, binds))
+        else:
+          new-body = for fold(base from fbody, vid from fvars):
+            AH.h-let(AC.c-bind(vid, T.t-blank), AH.h-env(AC.c-field-name(vid)), base)
+          end
+		  tmp = AC.c-bind(next-val(), T.t-blank)
+          closure-obj = AH.h-obj(for map(vid from fvars):
+            field-name  = AC.c-field-name(vid)
+            field-value = AC.c-bind(vid, T.t-blank)
+            AH.h-field(field-name, field-value)
+          end)
+		  AH.h-let(tmp, closure-obj,
+            AH.h-let(bind, AH.h-lam(name-bind, tmp), aexpr-h(b, vs, binds)))
+        end
     | a-method(l, args, ret, body) =>
-        name = next-func-name()
-        fbody = aexpr-h(body, vs, binds)
-		fvars = get-free-vars(fbody,
-                              set(for map(a from args):
-                                a.id
-                              end)).to-list()
-        funcs := link(
-          AH.named-func(name, 
-                     [closure-arg-bind] + args, 
-                     ret, 
-                     for fold(base from fbody, vid from fvars):
-                       AH.h-let(AC.c-bind(vid, A.a_blank),
-                             AH.h-dot(closure-arg-bind, AC.c-field-name(vid)),
-                             base)
-                     end),
-          funcs
-        )
-
-		tmp = AC.c-bind-loc(l, next-val(), A.a_blank)
-        name-bind = AC.c-bind-loc(l, name, A.a_blank)
-		AH.h-let(AC.c-bind(tmp, A.a_blank),
-              AH.h-obj(for map(vid from fvars): 
-                field-name  = AC.c-field-name(vid)
-                field-value = AC.c-bind(vid, A.a_blank)
-                AH.h-field(field-value, field-value) 
-              end),
-			  AH.h-let(bind, AH.h-lam(name-bind, tmp), aexpr-h(b, vs, binds)))
+        raise("methods not currently handled")
     | a-val(v) => 
         AH.h-let(bind, aval-h(v, vs), aexpr-h(b, vs, binds))
   end
@@ -559,7 +497,7 @@ fun aexpr-h(expr :: N.AExpr,
       let-lettable(bind, e, body, vs, new-binds)
     | a-var(l, bind, e, body) =>
         tmp = next-val()
-        tmp-bind = AC.c-bind(tmp, A.a_blank)
+        tmp-bind = AC.c-bind(tmp, T.t-blank)
         new-binds = link(bind, link(tmp-bind, binds))
         if N.is-a-val(e):
           AH.h-let(tmp-bind,
@@ -581,7 +519,7 @@ fun aexpr-h(expr :: N.AExpr,
     | a-split-app(l, is-var, f, args, helper, helper-args) => 
         raise("Congratulations! You've generated an a-split-app!")
     | a-if(l, c, t, e) => 
-        tmp-bind = AC.c-bind(next-val(), A.a_blank)
+        tmp-bind = AC.c-bind(next-val(), T.t-blank)
         AH.h-let(tmp-bind, 
               aval-h(c, vs), 
               AH.h-if(tmp-bind, 
@@ -604,11 +542,11 @@ fun aexpr-h(expr :: N.AExpr,
     | a-lettable(e) => 
         cases (N.ALettable) e:
           | a-val(v) => 
-              tmp = AC.c-bind(next-val(), A.a_blank)
+              tmp = AC.c-bind(next-val(), T.t-blank)
               AH.h-let(tmp, aval-h(v, vs), AH.h-ret(tmp))
           | else =>
               tmp = next-val()
-              let-lettable(AC.c-bind(tmp, A.a_blank),
+              let-lettable(AC.c-bind(tmp, T.t-blank),
                            e,
                            N.a-lettable(N.a-val(N.a-id(default-loc, tmp))),
                            vs,
@@ -635,18 +573,18 @@ end
 fun aval-h(val :: N.AVal, vars :: Set<String>) -> AH.HLettable:
   cases (N.AVal) val: 
     | a-num(l, n) => 
-        nums := link(n, nums)
-        bind-id = AC.c-bind-loc(l, num-id-prefix + n.tostring-fixed(num-len), A.a_name(l, "String"))
-        AH.h-id(bind-id)
+      num-bind = AC.c-bind-loc(l, number-identifier(n), T.t-number)
+      globals := link(AC.c-num(num-bind, n), globals)
+      AH.h-id(num-bind)
     | a-str(l, s) => 
-        str-name = AC.c-bind-loc(l, next-string-name(), A.a_name(l, "String"))
-        strings := link(AH.named-str(str-name, s), strings)
+        str-name = AC.c-bind-loc(l, gensym("str.p"), T.t-name("String"))
+        globals := link(AC.c-str(str-name, s), globals)
         AH.h-id(str-name)
     | a-bool(l, b) => 
         if b: AH.h-id(bool-id-true) else: AH.h-id(bool-id-false) end
     | a-undefined(l) => AH.h-undefined
     | a-id(l, id) => 
-      id-bind = AC.c-bind-loc(l, id, A.a_blank)
+      id-bind = AC.c-bind-loc(l, id, T.t-blank)
       if vars.member(id): AH.h-unbox(id-bind) else: AH.h-id(id-bind) end 
     | a-id-var(l, id) =>
         raise("ERROR - a-id-var should have been removed by now")
@@ -666,8 +604,7 @@ fun anf-to-h(prog :: N.AProg):
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))
-        {nums : nums,
-         strings : strings,
+        {globals : globals,
          datas : datas,
          funcs : funcs.map(filter-func),
          expr : fbody}

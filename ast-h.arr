@@ -2,7 +2,7 @@
 
 provide *
 
-import ast as A
+import "types.arr" as T
 import "ast-common.arr" as AC
 import "ast-anf.arr" as AN
 
@@ -11,46 +11,110 @@ import "ast-anf.arr" as AN
 # We'll need some way of handling depth for that. We'll deal with that later. 
 
 data HLettable:
-  | h-undefined with: 
-    tosyn(self): "undefined" end
-  | h-box(id :: AC.Bind) with: 
-    tosyn(self): "box " + self.id end
-  | h-id(id :: AC.Bind) with:
-    tosyn(self): self.id end # TODO something else? 
-  | h-unbox(id :: AC.Bind) with: 
-    tosyn(self): "unbox " + self.id end
+  | h-undefined
+  | h-box(id :: AC.Bind)
+  | h-id(id :: AC.Bind)
+  | h-unbox(id :: AC.Bind)
   | h-lam(f :: AC.Bind, closure :: AC.Bind)
-  | h-app(f :: AC.Bind, args :: List<AC.Bind>) with:
-    tosyn(self): self.f + "(" + self.args.str-join(",") + ")" end
+  | h-app(f :: AC.Bind, args :: List<AC.Bind>)
   | h-obj(fields :: List<HField>)
   | h-update(super :: AC.Bind, fields :: List<HField>)
-  | h-extend(super :: AC.Bind, fields :: List<HField>) # TODO merge?
+  | h-extend(super :: AC.Bind, fields :: List<HField>)
+  | h-env(field :: AC.Field)
   | h-dot(obj :: AC.Bind, field :: AC.Field)
   | h-colon(obj :: AC.Bind, field :: AC.Field)
-  | h-get-bang(obj :: AC.Bind, field :: AC.Field) # more?
+  | h-get-bang(obj :: AC.Bind, field :: AC.Field)
+sharing:
+  rename(self, _from :: AC.Bind, to :: AC.Bind) -> HLettable:
+    cases(HLettable) self:
+      | h-undefined => self
+      | h-box(id) =>
+        if id == _from: h-box(to) else: self end
+      | h-id(id) =>
+        if id == _from: h-id(to) else: self end
+      | h-unbox(id) =>
+        if id == _from: h-unbox(to) else: self end
+      | h-lam(f, closure) =>
+        if f == _from: h-lam(to, closure) else: self end
+      | h-app(f, args) =>
+        if f == _from: h-app(to, args) else: self end
+      | h-obj(fields :: List<HField>) =>
+        self
+      | h-update(obj, fields) =>
+        if obj == _from: h-update(to, fields) else: self end
+      | h-extend(obj, fields) =>
+        if obj == _from: h-extend(to, fields) else: self end
+      | h-env(field) =>
+        self
+      | h-dot(obj, field) =>
+        if obj == _from: h-dot(to, field) else: self end
+      | h-colon(obj, field) =>
+        if obj == _from: h-colon(to, field) else: self end
+      | h-get-bang(obj, field) =>
+        if obj == _from: h-get-bang(to, field) else: self end
+    end
+  end
 end
 
 data HCasesBranch:
   | h-cases-branch(name :: String, args :: List<AC.Bind>, body :: HExpr)
 end
 
-# We are, for now, just saving the binds as such. 
+fun maybe-rename(old :: AC.Bind, _from :: AC.Bind, to :: AC.Bind) -> AC.Bind:
+  if old == _from:
+    to
+  else:
+    old
+  end
+end
+
+# We are, for now, just saving the binds as such.
 data HExpr:
-  | h-ret(id :: AC.Bind) with:
-    tosyn(self): "ret " + self.id end
-  | h-let(bind :: AC.Bind, val :: HLettable, body :: HExpr) with: 
-    tosyn(self): 
-      self.bind.id + " : " + self.bind.ann + " = " + self.val.tosyn() 
-        + "\n" + self.body.tosyn() 
-    end
+  | h-ret(id :: AC.Bind)
+  | h-let(bind :: AC.Bind, val :: HLettable, body :: HExpr)
   | h-assign(bind :: AC.Bind, val :: AC.Bind, body :: HExpr)
   | h-try(body :: HExpr, bind :: AC.Bind, _except :: HExpr)
   | h-if(c :: AC.Bind, t :: HExpr, e :: HExpr)
-  | h-cases(type :: A.Ann, val :: AC.Bind, branches :: List<HCasesBranch>, _else :: Option<HExpr>)
+  | h-cases(type :: T.Type, val :: AC.Bind, branches :: List<HCasesBranch>, _else :: Option<HExpr>)
+sharing:
+  rename(self, _from :: AC.Bind, to :: AC.Bind) -> HExpr:
+    cases(HExpr) self:
+      | h-ret(id) =>
+        h-ret(maybe-rename(id, _from, to))
+      | h-let(bind, val, body) =>
+        new-bind = maybe-rename(bind, _from, to)
+        new-val  = val.rename(_from, to)
+        new-body = body.rename(_from, to)
+        h-let(new-bind, new-val, new-body)
+      | h-assign(bind, val, body) =>
+        new-bind = maybe-rename(bind, _from, to)
+        new-val  = maybe-rename(val, _from, to)
+        new-body = body.rename(_from, to)
+        h-assign(new-bind, new-val, new-body)
+      | h-try(body, bind, _except) =>
+        new-body = body.rename(_from, to)
+        new-bind = maybe-rename(bind, _from, to)
+        new-except = _except.rename(_from, to)
+        h-try(new-body, new-bind, new-except)
+      | h-if(c, t, e) =>
+        new-c = maybe-rename(c, _from, to)
+        new-t = t.rename(_from, to)
+        new-e = e.rename(_from, to)
+        h-if(new-c, new-t, new-e)
+      | h-cases(type, val, branches, _else) =>
+        new-val = maybe-rename(val, _from, to)
+        new-branches = for map(branch from branches): branch.rename(_from, to) end
+        new-else = cases(Option<HExpr>) _else:
+          | none => none
+          | some(e) => e.rename(_from, to)
+        end
+        h-cases(type, new-val, new-branches, new-else)
+    end
+  end
 end
 
 # and other types necessary for data expressions: 
-data HVariant: 
+data HVariant:
   | h-variant(name :: String, 
               members :: List<N.AVariantMember>, 
               with-members :: List<HField>)
@@ -78,11 +142,6 @@ data NamedFunc:
   | named-func(name :: String, 
                args :: List<AC.Bind>, 
                body :: HExpr,
-               ret :: A.Ann)
+               ret :: T.Type,
+               is-closure :: Boolean)
 end
-
-data NamedString:
-  | named-str(name :: AC.Bind, val :: String)
-end
-
-

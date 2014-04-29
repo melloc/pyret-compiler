@@ -2,6 +2,7 @@
 
 provide *
 
+import "types.arr" as T
 import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
 import "ast-anf.arr" as AN
@@ -45,9 +46,9 @@ sharing:
   end
 end
 
-fun find-adt(ann :: A.Ann, haystack :: List<ADT>) -> ADT:
-  cases(A.Ann) ann:
-    | a_name(l, id) =>
+fun find-adt(ann :: T.Type, haystack :: List<ADT>) -> ADT:
+  cases(T.Type) ann:
+    | t-name(id) =>
       found = list.find(fun(needle):
         needle.name == id
       end, haystack)
@@ -55,14 +56,8 @@ fun find-adt(ann :: A.Ann, haystack :: List<ADT>) -> ADT:
         | some(adt) => adt
         | none      => raise("Couldn't find data type " + id + " in program!")
       end
-    | a_pred(l, obj, field) => raise("modules not yet supported")
     | else => raise("Bad annotation: " + ann.torepr())
   end
-end
-
-data Global:
-  | l-number(id :: String, n :: String)
-  | l-string(id :: String, s :: String)
 end
 
 data ConRep:
@@ -107,11 +102,16 @@ sharing:
 end
 
 data Program:
-  | l-prog(constants :: List<Global>, procs :: List<Procedure>, adts :: List<ADT>)
+  | l-prog(constants :: List<AC.Global>, procs :: List<Procedure>, adts :: List<ADT>, init :: Expression)
 end
 
 data Procedure:
-    l-proc(name :: String, args :: List<AC.Bind>, ret :: A.Ann, body :: Expression)
+    l-proc(name :: String, args :: List<AC.Bind>, ret :: T.Type, body :: Expression, is-closure :: Boolean)
+end
+
+data Value:
+  | l-closure(f :: AC.Bind, env :: AC.Bind)
+  | l-boxed
 end
 
 data Lettable:
@@ -123,6 +123,7 @@ data Lettable:
   | l-copy(table :: AC.Bind)
   | l-box(id :: AC.Bind)
   | l-unbox(id :: AC.Bind)
+  | l-val(val :: Value)
 end
 
 data Branch:

@@ -3,6 +3,7 @@
 provide *
 
 import ast               as A
+import "types.arr"       as T
 import "ast-common.arr"  as AC
 import "ast-h.arr"       as AH
 import "ast-anf.arr"     as AN
@@ -17,15 +18,15 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-id(id)                => raise("There should be no h-id's left when converting to the lower AST!")
     | h-box(id)               => plug(AL.l-box(id))
     | h-unbox(id)             => plug(AL.l-unbox(id))
-    | h-lam(f, closure)       => raise("h-lam not handled")
+    | h-lam(f, env)           => plug(AL.l-val(AL.l-closure(f, env)))
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
-      empty-table = AL.l-copy(AC.c-bind("global.empty-table", A.a_blank))
+      empty-table = AL.l-copy(AC.c-bind("global.empty-table", T.t-record([])))
       cases(List<AH.HField>) fields:
         | empty      => 
           plug(empty-table)
         | link(f, r) =>
-          new-copy = AC.c-bind(gensym("table-copy"), A.a_blank)
+          new-copy = AC.c-bind(gensym("table-copy"), T.t-record([]))
           first-update = cases(AH.HField) f:
             | h-field(field-name, value) => 
               AL.l-update(new-copy, field-name, value)
@@ -73,7 +74,7 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
   cases(AH.HExpr) e:
     | h-ret(id)                  => plug(AL.l-ret(id))
     | h-let(bind, val, body)     =>
-      h-lettable-to-lower(val, fun(lettable):
+      h-lettable-to-lower(val, fun(lettable :: AL.Lettable):
         plug(h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
           AL.l-let(bind, lettable, expr)
         end))
@@ -108,9 +109,9 @@ end
 
 fun h-proc-to-lower(proc :: AH.NamedFunc, adts :: List<AL.ADT>) -> AL.Procedure:
   cases(AH.NamedFunc) proc:
-    | named-func(name, args, body, ret) =>
+    | named-func(name, args, body, ret, is-closure) =>
       l-body = h-expr-to-lower(body, adts, identity)
-      AL.l-proc(name, args, ret, l-body)
+      AL.l-proc(name, args, ret, l-body, is-closure)
   end
 end
 
@@ -149,9 +150,10 @@ fun h-to-lower(prog) -> AL.Program:
   adts = for map(adt from prog.datas):
     h-adt-to-lower(adt)
   end
-  constants = [] # TODO: Constants should be numbers and strings
+  print(prog.funcs)
   procs = for map(func from prog.funcs):
     h-proc-to-lower(func, adts)
   end
-  AL.l-prog(constants, procs, adts)
+  
+  AL.l-prog(prog.globals, procs, adts, h-expr-to-lower(prog.expr, adts, identity))
 end

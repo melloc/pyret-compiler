@@ -2,6 +2,7 @@
 
 provide *
 import ast as A
+import "types.arr" as T
 import "ast-common.arr" as AC
 import pprint as PP
 
@@ -107,7 +108,7 @@ data AExpr:
           PP.nest(INDENT, break-one + self.e.tosource())
     end
   | a-cases(l :: Loc,
-            type :: A.Ann,
+            type :: T.Type,
             val :: AVal,
             branches :: List<ACasesBranch>,
             _else :: Option<AExpr>) with:
@@ -224,10 +225,10 @@ data ALettable:
     label(self): "a-get-bang" end,
     tosource(self): PP.infix(INDENT, 0, str-bang, self.obj.tosource(), PP.str(self.field)) end
     # TODO I (kechpaja) added "ret" so that we can type-check the return value
-  | a-lam(l :: Loc, args :: List<AC.Bind>, ret :: A.Ann, body :: AExpr) with:
+  | a-lam(l :: Loc, args :: List<AC.Bind>, ret :: T.Type, body :: AExpr) with:
     label(self): "a-lam" end,
     tosource(self): fun-method-pretty(PP.str("lam"), self.args, self.body) end
-  | a-method(l :: Loc, args :: List<AC.Bind>, ret :: A.Ann, body :: AExpr) with:
+  | a-method(l :: Loc, args :: List<AC.Bind>, ret :: T.Type, body :: AExpr) with:
     label(self): "a-method" end,
     tosource(self): fun-method-pretty(PP.str("method"), self.args, self.body) end
   | a-val(v :: AVal) with:

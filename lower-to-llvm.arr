@@ -5,28 +5,11 @@ provide *
 import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
 import ast as A
+import "types.arr" as T
 import "ast-common.arr" as AC
 import "ast-anf.arr" as AN
 import "ast-lower.arr" as AL
 import "helpers.arr" as H
-
-# {"nums" : set(nums),
-#     "strings" : set(strings),
-#     "datas" : set(datas),
-#     "funcs" : set(funcs),
-#     "expr" : program-insides}
-# 
-# Program contains:
-#     - Constants
-#         - Numbers
-#         - Strings
-#     - Procedures
-# 
-# Record(fields :: List<Values>)
-# 
-# 
-# 
-# Data = VariantList(List<Variant>)
 
 empty-set = set([])
 
@@ -106,6 +89,7 @@ fun get-symbols-lettable(expr :: AL.Lettable) -> Set<String>:
     | l-unbox(id)                        => empty-set
     | l-application(f, args)             => empty-set
     | l-select(field, id, rep)           => empty-set
+    | l-val(val)                         => empty-set
   end
 end
 
@@ -136,23 +120,31 @@ end
 
 word = K.Integer(64)
 double-word = K.Struct([word, word], false)
+closure-type = K.Struct([word, K.Pointer(K.Integer(8), none)], false)
+struct-pyret-value = K.Struct([K.Integer(32), K.Integer(32), K.Pointer(K.Integer(8), none)], false)
 
-fun ann-to-type(annotation :: A.Ann) -> K.TypeKind:
-    cases(A.Ann) annotation:
-      | a_blank => double-word
-      | a_any   => double-word
-      | a_name(l, id)           => raise("Not handled")
-      | a_arrow(l, args, ret)   => K.FunctionType()
-      | a_method(l, args, ret)  => K.FunctionType()
-      | a_record(_, fields)     => 
+fun ann-to-type(type :: T.Type) -> K.TypeKind:
+    cases(T.Type) type:
+      | t-blank =>
+        struct-pyret-value
+      | t_any   =>
+        struct-pyret-value
+      | t-name(id)           =>
+        struct-pyret-value
+      | t-arrow(args, ret)   =>
+        K.FunctionType(ann-to-type(ret), for map(arg from args):
+          ann-to-type(arg)
+        end)
+      | t-method(args, ret)  =>
+        K.FunctionType(ann-to-type(ret), for map(arg from args):
+          ann-to-type(arg)
+        end)
+      | t-record(fields)     =>
         K.Struct(for map(field from fields):
-          cases(A.AField) field:
-            | a_field(_, name, ann) => K.TypeField(name, ann-to-type(ann))
+          cases(T.TypeField) field:
+            | t-field(_, name, ann) => K.TypeField(name, ann-to-type(ann))
           end
         end, false)
-      | a_app(l, ann, args)     => ann-to-type(ann)
-      | a_pred(l, ann, exp)     => raise("Not handled")
-      | a_dot(l, obj, field)    => raise("Not handled")
     end
 end
 
@@ -164,6 +156,42 @@ end
 word-star = K.Pointer(K.Integer(64), none)
 
 
+fun l-value-to-type(v :: AL.Value) -> K.TypeKind:
+  cases(AL.Value) v:
+    | l-closure(f, env) => closure-type
+    | l-boxed           =>
+  end
+end
+
+fun l-constant-to-llvm(constant :: AC.Global) -> L.Global:
+  ty = cases(AC.Global) constant:
+    | c-str(name, val) =>
+      K.Arr(val.length() + 1, K.Integer(8))
+    | c-num(name, val) =>
+      struct-pyret-value
+  end
+  mode = cases(AC.Global) constant:
+    | c-str(name, val) =>
+      L.GlobalConstant(K.ConstantString(val))
+    | c-num(name, val) =>
+      L.GlobalVariable
+  end
+  L.GlobalDecl(constant.name.id, L.Internal, L.Default, none, none, mode, ty, none, none)
+end
+
+fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
+  type = l-value-to-type(v)
+  mem-id = gensym("value-")
+  instrs = cases(AL.Value) v:
+    | l-closure(f, env) =>
+      [
+        
+      ]
+    | l-boxed           =>
+  end
+  H.pair(instrs, L.Load(K.Pointer(type, none), mem-id))
+end
+
 fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
   cases(AL.Lettable) l:
     | l-undefined => raise("l-undefined not handled")
@@ -172,7 +200,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-insert"), [
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty), 
         L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty),
-        L.Argument(K.Integer(64), K.ConstantInt(value), empty)
+        L.Argument(K.Integer(64), mk-llvm-variable(value, identifiers), empty)
       ], empty)
       H.pair(empty, call-op)
     | l-lookup(table, field-name) =>
@@ -192,8 +220,10 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
         L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty)
       ], empty)
       H.pair(empty, call-op)
-    | l-box(id) => H.pair(empty, L.Alloca(double-word))
-    | l-unbox(id) => raise("l-unbox not handled")
+    | l-box(id) => 
+      H.pair(empty, L.Alloca(double-word))
+    | l-unbox(id) => 
+      H.pair(empty, L.Load(double-word, id))
     | l-application(f, args) => 
       H.pair(empty, L.Call(false, L.CCC, word-star, mk-llvm-variable(f, identifiers), for map(arg from args):
         L.Argument(word-star, mk-llvm-variable(arg, identifiers), empty)
@@ -206,6 +236,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
         [ L.Assign(load-address, 
                    L.GetElementPtr(false, word-star, id, [H.pair(K.Integer(8), field)]))
         ], L.Load(rep.totype(), load-address))
+    | l-val(val) => l-value-to-llvm(val, symbols, identifiers, adts)
   end
 end
 
@@ -216,21 +247,22 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
       with-labels = for map(branch from branches): 
         H.pair(gensym("branch-") + case-label-suffix, branch) 
       end
-      switch-op   = L.Switch(K.Integer(32), value, for map(labeled-branch from with-labels):
+      switch-branches = for map(labeled-branch from with-labels):
         cases(H.Pair) labeled-branch:
           | pair(label, branch) => 
             L.switch-branch(K.Integer(32), branch.constructor.toint(), label)
         end
-      end)
-      labeled-branches = for map(labeled-branch from branches):
+      end
+      switch-op   = L.Switch(K.Integer(32), value, "default", switch-branches)
+      labeled-branches = for map(labeled-branch from with-labels):
         cases(H.Pair) labeled-branch:
           | pair(label, branch) =>
-            link(L.Label(label), l-expr-to-llvm(branch, symbols, adts))
+            link(L.Label(label), l-expr-to-llvm(branch.body, symbols, identifiers, adts))
         end
       end
       end-label = L.Label("end" + case-label-suffix)
       link(switch-op, H.flatten(labeled-branches))
-    | l-let(binding, exp, body) => 
+    | l-let(binding, exp, body) =>
       updated-identifiers = identifiers.insert(binding, LocalIdentifier)
       cases(H.Pair) l-lettable-to-llvm(exp, symbols, identifiers, adts):
         | pair(instrs, op) => 
@@ -250,26 +282,27 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
           exit-to(altern-branch, end-label),
           [L.Label(end-label)]
         ]))
-    | l-assign(id, val, body) => raise("assignment not yet implemented")
-    | l-ret(id)    => [L.Ret(double-word, mk-llvm-variable(id, identifiers))]
+    | l-assign(id, val, body) => []
+    | l-ret(id)    => [L.Ret(ann-to-type(id.ty), mk-llvm-variable(id, identifiers))]
   end
 end
 
 library = [
-  identifier(AC.c-bind("rational-plus-method", A.a_blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-minus-method", A.a_blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-times-method", A.a_blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-divide-method", A.a_blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-equals-method", A.a_blank), GlobalIdentifier)
+  identifier(AC.c-bind("rational-plus-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-minus-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-times-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-divide-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("rational-equals-method", T.t-blank), GlobalIdentifier),
+  identifier(AC.c-bind("global.empty-table", T.t-blank), GlobalIdentifier)
 ]
 
 fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
   cases(AL.Program) prog:
-    | l-prog(constants, procedures, adts) =>
+    | l-prog(constants, procedures, adts, init) =>
       # Build up the mappings from field names to numbers
       symbols = for fold(current from set([]), procedure from procedures):
         cases(AL.Procedure) procedure:
-          | l-proc(_, _, _, body) => current.union(get-symbols-expr(body))
+          | l-proc(_, _, _, body, is-closure) => current.union(get-symbols-expr(body))
         end
       end.to-list()
       var count = 0
@@ -277,31 +310,43 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         count := count + 1
         field-symbol(symbol, count)
       end)
+
       # Build up initial scope
       proc-identifiers = for map(proc from procedures):
-        identifier(AC.c-bind(proc.name, A.a_blank), GlobalIdentifier)
+        identifier(AC.c-bind(proc.name, T.t-blank), GlobalIdentifier)
       end
       constant-identifiers = for map(constant from constants):
-        identifier(AC.c-bind(constant.id, A.a_blank), GlobalIdentifier)
+        identifier(AC.c-bind(constant.name.id, T.t-blank), GlobalIdentifier)
       end
       identifiers = identifier-table(library + proc-identifiers + constant-identifiers)
-      L.Module(constants, for map(proc from procedures):
+
+      # Convert constants and procedures
+      llvm-globals    = for map(constant from constants):
+        l-constant-to-llvm(constant)
+      end
+      llvm-procedures = for map(proc from procedures):
         cases(AL.Procedure) proc:
-          | l-proc(name, args, ret, body) =>
+          | l-proc(name, args, ret, body, is-closure) =>
             arguments = for map(arg from args): 
-              L.Parameter(arg.id, ann-to-type(arg.ann), [])
+              L.Parameter(arg.id, ann-to-type(arg.ty), [])
             end
             func-identifiers = for fold(current from identifiers, arg from args):
               current.insert(arg, LocalIdentifier)
             end
             L.Procedure(name, ann-to-type(ret), arguments, [], l-expr-to-llvm(body, symbol-table, func-identifiers, adts))
         end
-      end)
-  end
-end
+      end
 
-check:
-    low-to-llvm(AL.l-prog([
-    
-    ], [], []))
+      # Create main()
+      main-identifiers = identifiers
+        .insert(AC.c-bind("argc", T.t-word), LocalIdentifier)
+        .insert(AC.c-bind("argv", T.t-pointer(T.t-pointer(T.t-byte))), LocalIdentifier)
+      main = L.Procedure("main", K.Integer(64), [
+        L.Parameter("argc", K.Integer(32), []),
+        L.Parameter("argc", K.Pointer(K.Pointer(K.Integer(8), none), none), [])
+      ], [L.NoUnwind], l-expr-to-llvm(init, symbol-table, main-identifiers, adts))
+
+      # Instantiate module
+      L.Module(llvm-globals, link(main, llvm-procedures))
+  end
 end

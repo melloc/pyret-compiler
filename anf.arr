@@ -3,6 +3,7 @@
 provide *
 
 import ast as A
+import "types.arr" as T
 import "ast-anf.arr" as N
 import "ast-common.arr" as AC
 
@@ -19,17 +20,18 @@ fun anf-term(e :: A.Expr) -> N.AExpr:
     )
 end
 
-fun bind(l, id): AC.c-bind-loc(l, id, A.a_blank);
+fun new-bind(l, id): AC.c-bind-loc(l, id, T.t-blank);
+fun bind(b :: A.Bind): AC.c-bind-loc(b.l, b.id, T.ann-to-type(b.ann));
 
 fun anf-bind(b):
   cases(A.Bind) b:
-    | s_bind(l, id, ann) => AC.c-bind-loc(l, id, ann)
+    | s_bind(l, id, ann) => AC.c-bind-loc(l, id, T.ann-to-type(ann))
   end
 end
 
 fun mk-id(loc, base):
   t = gensym(base)
-  { id: t, id-b: bind(loc, t), id-e: N.a-id(loc, t) }
+  { id: t, id-b: new-bind(loc, t), id-e: N.a-id(loc, t) }
 end
 
 fun anf-name(expr :: A.Expr, name-hint :: String, k :: (N.AVal -> N.AExpr)) -> N.AExpr:
@@ -89,11 +91,11 @@ fun anf-block(es-init :: List<A.Expr>, k :: (N.ALettable -> N.AExpr)):
           cases(A.Expr) f:
             | s_var(l, b, val) =>
                 anf(val, fun(lettable):
-                  N.a-var(f.l, bind(b.l, b.id), lettable, anf-block-help(r))
+                  N.a-var(f.l, bind(b), lettable, anf-block-help(r))
                 end)
             | s_let(l, b, val) =>
                 anf(val, fun(lettable):
-                  N.a-let(f.l, bind(b.l, b.id), lettable, anf-block-help(r))
+                  N.a-let(f.l, bind(b), lettable, anf-block-help(r))
                 end)
             | else => anf(f, fun(lettable):
                   t = mk-id(f.l, "anf_begin_dropped")
@@ -231,15 +233,15 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
         anf(_else, k)
       end
 
-    | s_cases(l, type, val, branches) =>
+    | s_cases(l, ann, val, branches) =>
       anf-name(val, "anf_cases", fun(t):
-        N.a-cases(l, type, t, for map(branch from branches):
+        N.a-cases(l, T.ann-to-type(ann), t, for map(branch from branches):
           anf-branch(branch, k)
         end, none)
       end)
-    | s_cases_else(l, type, val, branches, _else) =>
+    | s_cases_else(l, ann, val, branches, _else) =>
       anf-name(val, "anf_cases", fun(t):
-        N.a-cases(l, type, t, for map(branch from branches):
+        N.a-cases(l, T.ann-to-type(ann), t, for map(branch from branches):
           anf-branch(branch, k)
         end, some(anf(_else, k)))
       end)
@@ -251,13 +253,13 @@ fun anf(e :: A.Expr, k :: (N.ALettable -> N.AExpr)) -> N.AExpr:
     | s_user_block(l, body) => anf(body, k)
 
     | s_fun(l, name, params, args, ret, doc, body, check) =>
-      a-fun = N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body))
-      N.a-let(l, AC.c-bind-loc(l, name, A.a_blank), a-fun,
+      a-fun = N.a-lam(l, args.map(fun(b): bind(b) end), T.ann-to-type(ret), anf-term(body))
+      N.a-let(l, AC.c-bind-loc(l, name, T.t-blank), a-fun,
                 k(N.a-val(N.a-id(l, name))))
     | s_lam(l, params, args, ret, doc, body, _) =>
-      k(N.a-lam(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body)))
+      k(N.a-lam(l, args.map(fun(b): bind(b) end), ret, anf-term(body)))
     | s_method(l, args, ret, doc, body, _) =>
-      k(N.a-method(l, args.map(fun(b): bind(b.l, b.id) end), ret, anf-term(body)))
+      k(N.a-method(l, args.map(fun(b): bind(b) end), ret, anf-term(body)))
 
     | s_app(l, f, args) =>
       anf-name(f, "anf_fun", fun(v):
