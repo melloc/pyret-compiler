@@ -269,7 +269,14 @@ sharing:
 end
 
 data SwitchBranch:
-  | switch-branch(intty :: K.TypeKind, value, label :: String)
+  | switch-branch(intty :: K.is-Integer, value :: K.is-ConstantInt, label :: String)
+sharing:
+  tostring(self):
+    cases(SwitchBranch) self:
+      | switch-branch(intty, value, label) =>
+        intty.tostring() + " " + value.tostring() + ", label " + label + "\n"
+    end
+  end
 end
 
 data OpCode:
@@ -279,7 +286,7 @@ data OpCode:
   | RetVoid
   | BrConditional(cond-id :: String, consq-label :: String, altern-label :: String)
   | BrUnconditional(dest-label :: String)
-  | Switch(intty :: K.TypeKind, value, default :: String, branches :: List<SwitchBranch>)
+  | Switch(intty :: K.TypeKind, value :: K.ValueKind, default :: String, branches :: List<SwitchBranch>)
   | IndirectBr
   | Invoke
   | Invalid2
@@ -374,13 +381,13 @@ data OpCode:
   | FPExt
   | PtrToInt
   | IntToPtr
-  | BitCast(from-ty :: K.TypeKind, value, to-ty :: K.TypeKind)
+  | BitCast(from-ty :: K.TypeKind, value :: K.ValueKind, to-ty :: K.TypeKind)
   # Other Operators
-  | ICmp(cond :: I.Icmp,
+  | ICmp(cond :: I.ICmp,
          typ  :: K.TypeKind,
          op1  :: K.ValueKind,
          op2  :: K.ValueKind)
-  | FCmp(cond :: F.Fcmp,
+  | FCmp(cond :: F.FCmp,
          typ  :: K.TypeKind,
          op1  :: K.ValueKind,
          op2  :: K.ValueKind)

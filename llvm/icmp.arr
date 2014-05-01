@@ -2,7 +2,7 @@
 
 provide *
 
-data Icmp:
+data ICmp:
   | Eq
   | Ne
   | Ugt
