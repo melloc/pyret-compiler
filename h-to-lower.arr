@@ -67,6 +67,7 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-dot(obj, field)       => plug(AL.l-lookup(obj, field))
     | h-colon(obj, field)     => plug(AL.l-lookup(obj, field))
     | h-get-bang(obj, field)  => plug(AL.l-lookup(obj, field))
+    | h-env(field)            => plug(AL.l-env(field))
   end
 end
 
@@ -96,7 +97,14 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
           | h-cases-branch(name, args, body) =>
             variant = adt.lookup-variant(name)
             lower-body = h-expr-to-lower(body, adts, identity)
-            AL.l-branch(variant.tag, lower-body)
+            joined = H.zip(args, variant.fields)
+            new-body = for fold(current from lower-body, pair from joined):
+              cases(H.Pair) pair:
+                | pair(binding, field) =>
+                  AL.l-let(binding, AL.l-lookup(val, field), current)
+              end
+            end
+            AL.l-branch(variant.tag, new-body)
         end
       end
       lower-else = cases(Option<AH.HExpr>) _else:
@@ -115,11 +123,11 @@ fun h-proc-to-lower(proc :: AH.NamedFunc, adts :: List<AL.ADT>) -> AL.Procedure:
   end
 end
 
-fun h-variant-member-to-lower(member :: AN.AVariantMember) -> AL.VariantMember:
+fun h-variant-member-to-lower(member :: AN.AVariantMember) -> AC.Field:
   # TODO: Some of this may need an overhaul
   cases(AN.AVariantMember) member:
     | a-variant-member(l, member-type, bind) =>
-      AL.l-variant-member(bind.id)
+      AC.c-field-name(bind.id)
   end
 end
 

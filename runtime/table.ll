@@ -50,23 +50,6 @@ define i64 @table-lookup(i8** %PJLArray, i64 %key) nounwind {
   ret i64 %deref
 }
 
-define i64 @main(i32 %argc, i8** %argv) nounwind {
-  %1 = alloca i32         
-  %2 = alloca i32         
-  %3 = alloca i8**         
-  store i32 0, i32* %1
-  store i32 %argc, i32* %2         
-  store i8** %argv, i8*** %3         
-  %PJLArray = alloca i8*                                    ;; Allocate space for PJLArray
-  store i8* null, i8** %PJLArray         
-  call void @table-insert(i8** %PJLArray, i64 5, i64 10)
-  %new-table = alloca i8*
-  %copy-ret = call i8* @copy(i8** %PJLArray)
-  store i8* %copy-ret, i8** %new-table
-  %res = call i64 @table-lookup(i8** %new-table, i64 5)
-  ret i64 %res 
-}
-
 declare i64* @JudyLIns(i8**, i64, %struct.J_UDY_ERROR_STRUCT*)
 declare i64* @JudyLGet(i8*, i64, %struct.J_UDY_ERROR_STRUCT*)
 declare i64* @JudyLFirst(i8*, i64*, %struct.J_UDY_ERROR_STRUCT*)

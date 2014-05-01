@@ -18,12 +18,8 @@ data AccessPath:
   | SelP(i :: Number, a :: AccessPath)
 end
 
-data VariantMember:
-  | l-variant-member(name :: String)
-end
-
 data Variant:
-  | l-variant(name :: String, tag :: ConRep, fields :: List<VariantMember>)
+  | l-variant(name :: String, tag :: ConRep, fields :: List<AC.Field>)
 end
 
 data ADT:
@@ -120,6 +116,7 @@ data Lettable:
   | l-select(field :: Number, id :: String, rep :: ConRep)
   | l-update(table :: AC.Bind, field-name :: AC.Field, value :: AC.Bind)
   | l-lookup(table :: AC.Bind, field-name :: AC.Field)
+  | l-env(field-name :: AC.Field)
   | l-copy(table :: AC.Bind)
   | l-box(id :: AC.Bind)
   | l-unbox(id :: AC.Bind)
