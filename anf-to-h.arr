@@ -452,7 +452,7 @@ fun let-lettable(bind :: AC.Bind,
                                         AC.c-field-name(field)), 
                           aexpr-h(b, vs, binds)))
     | a-lam(l, args, ret, body) =>
-        name = gensym("func." + bind.id)
+        name = gensym("func." + bind.id + ".")
         name-bind = AC.c-bind-loc(l, name, T.t-blank)
         fbody = aexpr-h(body, vs, binds)
 
@@ -464,14 +464,12 @@ fun let-lettable(bind :: AC.Bind,
         is-closure = fvars.length() <> 0
 
         # Lift procedure
-        func = AH.named-func(name, args, fbody, ret, is-closure)
+        new-body = for fold(base from fbody, vid from fvars):
+          AH.h-let(AC.c-bind(vid, T.t-blank), AH.h-env(AC.c-field-name(vid)), base)
+        end
+        func = AH.named-func(name, args, new-body, ret, is-closure)
         funcs := link(func, funcs)
-        if (is-closure):
-          AH.h-let(bind, AH.h-id(name-bind), aexpr-h(b, vs, binds))
-        else:
-          new-body = for fold(base from fbody, vid from fvars):
-            AH.h-let(AC.c-bind(vid, T.t-blank), AH.h-env(AC.c-field-name(vid)), base)
-          end
+        if is-closure:
 		  tmp = AC.c-bind(next-val(), T.t-blank)
           closure-obj = AH.h-obj(for map(vid from fvars):
             field-name  = AC.c-field-name(vid)
@@ -480,6 +478,8 @@ fun let-lettable(bind :: AC.Bind,
           end)
 		  AH.h-let(tmp, closure-obj,
             AH.h-let(bind, AH.h-lam(name-bind, tmp), aexpr-h(b, vs, binds)))
+        else:
+          AH.h-let(bind, AH.h-id(name-bind), aexpr-h(b, vs, binds))
         end
     | a-method(l, args, ret, body) =>
         raise("methods not currently handled")
