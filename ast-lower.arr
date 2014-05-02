@@ -128,11 +128,12 @@ data Branch:
 end
 
 data Expression:
-  | l-switch(value :: AC.Bind, branches :: List<Branch>, default :: Option<Expression>)
+  | l-switch(value :: AC.Bind, branches :: List<Branch>, default :: Expression)
   | l-let(binding :: AC.Bind, e :: Lettable, body :: Expression)
   | l-seq(e :: Lettable, body :: Expression)
   | l-assign(binding :: AC.Bind, val :: AC.Bind, body :: Expression)
   | l-if(cond :: AC.Bind, consq :: Expression, altern :: Expression)
+  | l-exit(message :: String)
   | l-ret(id :: AC.Bind)
 end
 

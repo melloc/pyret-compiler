@@ -274,7 +274,7 @@ sharing:
   tostring(self):
     cases(SwitchBranch) self:
       | switch-branch(intty, value, label) =>
-        intty.tostring() + " " + value.tostring() + ", label " + label + "\n"
+        intty.tostring() + " " + value.tostring() + ", label %" + label + "\n"
     end
   end
 end
@@ -351,7 +351,7 @@ data OpCode:
         op2 :: K.ValueKind)
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, ptr)
+  | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
   | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
           value-typ   :: K.TypeKind,
           value       :: K.ValueKind,
@@ -368,7 +368,7 @@ data OpCode:
                 #ordering ::
                 #alignment ::
                 # TODO TODO TODO
-  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<H.Pair<K.TypeKind, Number>>)
+  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val :: K.ValueKind, idxs :: List<Index>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -437,7 +437,7 @@ sharing:
       | BrUnconditional(dest-label :: String) =>
         "br " + dest-label
       | Switch(intty, value, default, branches) =>
-        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default
+        "switch " + intty.tostring() + " " + value.tostring() + ", label %" + default
           + cases(List) branches:
               | empty => ""
               | link(_, _) =>
@@ -520,13 +520,11 @@ sharing:
               | some(val) => " !nontemporal !" + val.tostring()
             end
       | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
-      | GetElementPtr(inbound, pty, val, accesses) =>
+      | GetElementPtr(inbound, pty, val, idxs) =>
         "getelementptr " + if inbound: "inbound " else: "" end + pty.tostring() + "*"
-          + for fold(base from "", access from accesses):
-              cases(H.Pair) access:
-                | pair(ty, idx) => base + ", " + ty.tostring() + " " + idx.tostring()
-              end
-            end
+          + for map(idx from idxs):
+              idx.tostring()
+            end.join-str(", ")
       | Trunc    =>
       | ZExt     =>
       | SExt     =>

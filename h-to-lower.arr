@@ -108,8 +108,10 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
         end
       end
       lower-else = cases(Option<AH.HExpr>) _else:
-        | some(else-hexpr) => some(h-expr-to-lower(else-hexpr, adts, identity))
-        | none    => none
+        | some(else-hexpr) => 
+          h-expr-to-lower(else-hexpr, adts, identity)
+        | none    =>
+          AL.l-exit("No usable case available: " + type.tostring())
       end
       plug(AL.l-switch(val, lower-branches, lower-else))
   end

@@ -20,11 +20,12 @@ data TypeKind:
   | Ppc_fp128
   | Label
   | Integer(width :: Number)
-  | FunctionType(ret :: TypeKind, params :: List<TypeKind>)
+  | FunctionType(ret :: TypeKind, params :: List<TypeKind>, is-vararg :: Boolean)
   | Struct(fields :: List<TypeKindField>, packed :: Bool)
   | Arr(len :: Number, typ :: TypeKind)
   | Pointer(typ :: TypeKind, addrspace :: Option<Number>)
   | Vector(len :: Number, typ :: TypeKind)
+  | TypeIdentifier(name :: String)
   | Metadata
   | X86_mmx
 sharing:
@@ -38,14 +39,18 @@ sharing:
       | Fp128     => "fp128"
       | Ppc_fp128 => "ppc_fp128"
       | Label     => "label"
-      | Integer(width :: Number) =>
+      | Integer(width) =>
         "i" + width.tostring()
-      | FunctionType(ret :: TypeKind, params :: List<TypeKind>) =>
-        ret.tostring() + " (" + params.join-str(", ") + ")"
+      | FunctionType(ret, params, is-vararg) =>
+        ret.tostring() 
+          + " (" 
+          + params.join-str(", ") 
+          + if is-vararg: ", ..." else: "" end
+          + ")"
       | Struct(fields, packed) =>
         inside = "{ " + fields.join-str(", ") + " }"
         if packed: "<" + inside + ">" else: inside end
-      | Arr(len :: Number, typ :: TypeKind) =>
+      | Arr(len, typ) =>
         "[" + len.tostring() + " x " + typ.tostring() + "]"
       | Pointer(typ, addrspace) =>
         cases (Option<Number>) addrspace:
@@ -54,6 +59,8 @@ sharing:
         end
       | Vector(len, typ) =>
         "<" + len.tostring() + " x " + typ.tostring() + ">"
+      | TypeIdentifier(name) =>
+        "%" + name
       | Metadata =>
         "metadata"
       | X86_mmx  =>
@@ -159,6 +166,16 @@ sharing:
   end
 end
 
+data Index:
+  | access(ty :: TypeKind, val :: ValueKind)
+sharing:
+  tostring(self) -> String:
+    cases(Index) self:
+      | access(ty, val) => 
+        ty.tostring() + " " + val.tostring()
+    end
+  end
+end
 
 data ConstantExpression:
   | Trunc(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
@@ -174,7 +191,7 @@ data ConstantExpression:
   | IntToPtr(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
   | BitCast(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
   | AddrSpaceCast(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
-  | GetElementPtr(inbounds :: Boolean, ptr :: ValueKind, idxs :: List<Number>)
+  | GetElementPtr(inbounds :: Boolean, ty :: TypeKind, cst :: ValueKind, idxs :: List<Index>)
   | Select
   | ICmp(cond :: I.ICmp, ty1 :: TypeKind, val1 :: ValueKind, ty2 :: TypeKind, val2 :: ValueKind)
   | FCmp(cond :: F.FCmp, ty1 :: TypeKind, val1 :: ValueKind, ty2 :: TypeKind, val2 :: ValueKind)
@@ -225,7 +242,15 @@ sharing:
       | AddrSpaceCast(from-ty, cst, to-ty) =>
         "addrspacecast "
           + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
-      | GetElementPtr(inbounds, ptr, idxs) =>
+      | GetElementPtr(inbounds, ty, cst, idxs) =>
+        "getelementptr "
+          + if inbounds: "inbounds " else: "" end
+          + "("
+          + ty.tostring() + "* " + cst.tostring() + ", "
+          + for map(idx from idxs):
+              idx.tostring()
+            end.join-str(", ")
+          + ")"
       | Select =>
       | ICmp(cond, val1, val2) =>
       | FCmp(cond, val1, val2) =>

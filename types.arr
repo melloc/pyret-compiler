@@ -17,6 +17,33 @@ data Type:
   | t-number
   | t-pointer(ty :: Type)
   | t-param-name(name :: String, param :: Type)
+sharing:
+  tostring(self):
+    cases(Type) self:
+      | t-blank =>
+        "Blank type"
+      | t-any =>
+        "Any"
+      | t-name(name) =>
+        name
+      | t-arrow(args, ret) =>
+        args.join-str(", ") + " -> " + ret.tostring()
+      | t-method(args, ret) =>
+        "((" + args.join-str(", ") + ") -> " + ret.tostring() + ")"
+      | t-record(fields) =>
+      | t-void =>
+        "Void"
+      | t-byte =>
+        "Byte"
+      | t-word =>
+        "Word"
+      | t-number =>
+        "Number"
+      | t-pointer(ty) =>
+        ty.tostring() + "*"
+      | t-param-name(name, param) =>
+    end
+  end
 end
 
 data TypeField:
