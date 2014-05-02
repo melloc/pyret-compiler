@@ -25,4 +25,24 @@ data AtomicOrdering:
   | Release
   | AcqiureRelease
   | SequentiallyConsistent
+sharing:
+  tostring(self) -> String:
+    cases(AtomicOrdering) self:
+      | NotAtomic =>
+        ""
+      | Unordered =>
+        "unordered"
+      | Monotonic =>
+        "monotonic"
+      | Invalid =>
+      | Acquire =>
+        "acquire"
+      | Release =>
+        "release"
+      | AcquireRelease =>
+        "acq_rel"
+      | SequentiallyConsistent =>
+        "seq_cst"
+    end
+  end
 end

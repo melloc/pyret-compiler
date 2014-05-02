@@ -4,6 +4,21 @@ provide *
 
 import file as F
 
+fun <A,B> zip(a :: List<A>, b :: List<B>) -> List<Pair<A,B>>:
+  cases(List<A>) a:
+    | empty =>
+      cases(List<B>) b:
+        | empty        => empty
+        | link(f2, r2) => raise("Lists not same length! Will not zip.")
+      end
+    | link(f1, r1) =>
+      cases(List<B>) b:
+        | empty        => raise("Lists not same length! Will not zip.")
+        | link(f2, r2) => link(pair(f1, f2), zip(r1, r2))
+      end
+  end
+end
+
 fun flatten(alol):
   for fold(base from [], current from alol):
     base.append(current)

@@ -3,6 +3,8 @@
 provide *
 
 # import "llvm.arr" as LLVM
+import "icmp.arr" as I
+import "fcmp.arr" as F
 
 data TypeKindField:
   | TypeField(name :: String, kind :: TypeKind)
@@ -33,9 +35,9 @@ sharing:
       | Float     => "float"
       | Double    => "double"
       | X86fp80   => "x86_fp80"
-      | Fp128     => "fp128" 
+      | Fp128     => "fp128"
       | Ppc_fp128 => "ppc_fp128"
-      | Label     => "label" 
+      | Label     => "label"
       | Integer(width :: Number) =>
         "i" + width.tostring()
       | FunctionType(ret :: TypeKind, params :: List<TypeKind>) =>
@@ -48,13 +50,13 @@ sharing:
       | Pointer(typ, addrspace) =>
         cases (Option<Number>) addrspace:
           | some(n) => typ.tostring() + " addrspace(" + n.tostring() + ")*"
-          | none => typ.tostring() + "*"  
+          | none => typ.tostring() + "*"
         end
       | Vector(len, typ) =>
         "<" + len.tostring() + " x " + typ.tostring() + ">"
-      | Metadata => 
+      | Metadata =>
         "metadata"
-      | X86_mmx  => 
+      | X86_mmx  =>
         "x86mmx"
     end
   end
@@ -80,9 +82,9 @@ data ValueKind:
   | NullValue
   | Argument
   | BasicBlock
-  | InlineAsm(instructions :: String, 
-              constraints  :: String, 
-              side-effects :: Boolean, 
+  | InlineAsm(instructions :: String,
+              constraints  :: String,
+              side-effects :: Boolean,
               align-stack  :: Boolean,
               dialect      :: ASMDialect,
               metadata     :: Option<ValueKind<is-MDNode>>)
@@ -94,7 +96,7 @@ data ValueKind:
   | ConstantString(value :: String)
   | ConstantDataArray
   | ConstantDataVector
-  | ConstantExpr
+  | ConstantExpr(op :: ConstantExpression)
   | ConstantFP(value :: Number)
   | ConstantInt(value :: Number)
   | ConstantPointerNull
@@ -105,7 +107,7 @@ data ValueKind:
   | GlobalVariable(id :: String)
   | LocalVariable(id :: String)
   | UndefValue
-  | Instruction #(op :: LLVM.Opcode)
+  | Instruction
 sharing:
   tostring(self) -> String:
     cases(ValueKind) self:
@@ -120,25 +122,24 @@ sharing:
       | ConstantAggregateZero =>
       | ConstantArray(ty :: TypeKind, values :: List<ValueKind>) =>
         "[ "
-          + for map(value from values): 
-               ty.tostring() + " " + value.tostring() 
+          + for map(value from values):
+               ty.tostring() + " " + value.tostring()
             end.join(", ")
           + " ]"
       | ConstantString(val) =>
-        "c\"" + val + "\00\""
+        "c\"" + val + "\\00\""
       | ConstantDataArray  =>
       | ConstantDataVector =>
-      | ConstantExpr =>
       | ConstantFP(value :: Number)  =>
-      | ConstantInt(value :: Number) => 
+      | ConstantInt(value :: Number) =>
         value.tostring()
       | ConstantPointerNull =>
         "null"
       | ConstantStruct(fields :: List<StructField>) =>
-        "{ " 
+        "{ "
           + for map(field from fields):
               cases(StructField) field:
-                | struct-field(ty, value) => 
+                | struct-field(ty, value) =>
                   ty.tostring() + " " + value.tostring()
               end
             end.join(", ")
@@ -152,7 +153,88 @@ sharing:
         "%" + id
       | UndefValue  =>
         "undef"
-      | Instruction =>
+      | ConstantExpr(op :: ConstantExpression) =>
+        op.tostring()
     end
   end
 end
+
+
+data ConstantExpression:
+  | Trunc(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | ZExt(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | SExt(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | FPToUI(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | FPToSI(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | UIToFP(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | SIToFP(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | FPTrunc(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | FPExt(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | PtrToInt(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | IntToPtr(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | BitCast(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | AddrSpaceCast(from-ty :: TypeKind, cst :: ValueKind, to-ty :: TypeKind)
+  | GetElementPtr(inbounds :: Boolean, ptr :: ValueKind, idxs :: List<Number>)
+  | Select
+  | ICmp(cond :: I.ICmp, ty1 :: TypeKind, val1 :: ValueKind, ty2 :: TypeKind, val2 :: ValueKind)
+  | FCmp(cond :: F.FCmp, ty1 :: TypeKind, val1 :: ValueKind, ty2 :: TypeKind, val2 :: ValueKind)
+  | ExtractElement(val :: ValueKind, idx :: Number)
+  | InsertElement(val :: ValueKind, idx :: Number)
+  | ShuffleVector
+  | ExtractValue
+  | InsertValue
+sharing:
+  tostring(self):
+    cases(ConstantExpression) self:
+      | Trunc(from-ty, cst, to-ty)         =>
+        "trunc " 
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | ZExt(from-ty, cst, to-ty)          =>
+        "zext " 
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | SExt(from-ty, cst, to-ty)          =>
+        "sext "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | FPToUI(from-ty, cst, to-ty)        =>
+        "fptoui "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | FPToSI(from-ty, cst, to-ty)        =>
+        "fptosi "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | UIToFP(from-ty, cst, to-ty)        =>
+        "uitofp "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | SIToFP(from-ty, cst, to-ty)        =>
+        "sitofp "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | FPTrunc(from-ty, cst, to-ty)       =>
+        "fptrunc "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | FPExt(from-ty, cst, to-ty)         =>
+        "fpext "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | PtrToInt(from-ty, cst, to-ty)      =>
+        "ptrtoint "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | IntToPtr(from-ty, cst, to-ty)      =>
+        "inttoptr "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | BitCast(from-ty, cst, to-ty)       =>
+        "bitcast "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | AddrSpaceCast(from-ty, cst, to-ty) =>
+        "addrspacecast "
+          + "(" + from-ty.tostring() + " " + cst.tostring() + " to " + to-ty.tostring() + ")"
+      | GetElementPtr(inbounds, ptr, idxs) =>
+      | Select =>
+      | ICmp(cond, val1, val2) =>
+      | FCmp(cond, val1, val2) =>
+      | ExtractElement(val, idx) =>
+      | InsertElement(val, idx) =>
+      | ShuffleVector =>
+      | ExtractValue =>
+      | InsertValue =>
+    end
+  end
+end
+

@@ -2,7 +2,7 @@
 
 provide *
 
-data Fcmp:
+data FCmp:
   | False
   | Oeq
   | Ogt
