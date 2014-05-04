@@ -207,6 +207,44 @@ fun l-value-to-type(v :: AL.Value) -> K.TypeKind:
   end
 end
 
+fun initialize-constant(constant :: AC.Global) -> { globals : List<L.Global>, instrs : List<L.Instruction> }:
+  cases(AC.Global) constant:
+    | c-str(name, val) =>
+      raise("Strings not yet supported")
+    | c-num(name, val) =>
+
+      # Prep string for initialization
+      global-str   = val.tostring-fixed(10)
+      num-str-name = gensym("num-init.str.")
+      num-str-id   = K.GlobalVariable(num-str-name)
+      num-str-ty   = K.Arr(global-str.length() + 1, byte)
+      access       = K.access(K.Integer(32), K.ConstantInt(0))
+      num-str-arg  = K.ConstantExpr(K.GetElementPtr(true, num-str-ty, num-str-id, [access, access]))
+      visibility   = L.Default
+      mode    = L.GlobalConstant
+      linkage = L.Private
+      value   = K.ConstantString(global-str)
+      globals = [
+          L.GlobalDecl(num-str-name, linkage, visibility, none, none, true, mode, num-str-ty, some(value), none, none)
+      ]
+
+      # Prep initialization instructions
+      num-name     = gensym("num-init.")
+      num-id       = K.LocalVariable(num-name)
+      global-ty    = K.Pointer(struct-pyret-value, none)
+      global-id    = K.GlobalVariable(name.id)
+      instrs  = [
+        L.Assign(num-name, L.Call(false, L.CCC, struct-pyret-value,
+          K.GlobalVariable("initialize-integer"),
+          [
+            L.Argument(bytes, num-str-arg, [])
+          ], [])),
+        L.NoAssign(L.Store(false, struct-pyret-value, num-id, global-ty, global-id, none, none))
+      ]
+      { globals : globals, instrs : instrs }
+  end
+end
+
 fun l-constant-to-llvm(constant :: AC.Global) -> L.Global:
   var-name   = constant.name.id
   visibility = L.Default
@@ -325,8 +363,15 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       load-op = L.Load(bind-type, bind-id)
       H.pair(empty, load-op)
     | l-application(f, args) =>
-      H.pair(empty, L.Call(false, L.CCC, word-star, mk-llvm-variable(f, identifiers), for map(arg from args):
-        L.Argument(word-star, mk-llvm-variable(arg, identifiers), empty)
+      ret-type = cases(K.TypeKind) ann-to-type(f.ty, some(f), identifiers):
+        | FunctionType(ret, _, _) =>
+          ret
+        | else =>
+          print("Warning! Applying something that might not be a function! This may be an bug in the source program, or in the inferencer. Assuming that it is a function that returns Any.")
+          struct-pyret-value
+      end
+      H.pair(empty, L.Call(false, L.CCC, ret-type, mk-llvm-variable(f, identifiers), for map(arg from args):
+        L.Argument(ann-to-type(arg.ty, some(arg), identifiers), mk-llvm-variable(arg, identifiers), empty)
       end, empty))
     | l-select(field, id, rep) =>
       select-suffix = gensym("-select-var.")
@@ -424,15 +469,17 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
   end
 end
 
+math-fun-type = T.t-arrow([T.t-number, T.t-number], T.t-number)
+
 library = [
-  identifier(AC.c-bind("rational-plus-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-minus-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-times-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-divide-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-equals-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-lte-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("global.empty-table", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("print", T.t-blank), GlobalIdentifier)
+  identifier(AC.c-bind("rational-plus-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-minus-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-times-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-divide-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-equals-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-lte-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("global.empty-table", T.t-record([])), GlobalIdentifier),
+  identifier(AC.c-bind("print", T.t-arrow([T.t-any], T.t-any)), GlobalIdentifier)
 ]
 
 fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
@@ -461,10 +508,14 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       end
       identifiers = identifier-table(library + proc-identifiers + constant-identifiers)
 
-      # Convert constants and procedures
-      llvm-globals    = for map(constant from constants):
-        l-constant-to-llvm(constant)
+      # Convert constants and set up constant initialization logic
+      llvm-globals      = constants.map(l-constant-to-llvm)
+      llvm-globals-init = for fold(base from {globals : [], instrs : []}, 
+                                   obj from constants.map(initialize-constant)):
+        { globals : base.globals + obj.globals, instrs : base.instrs + obj.instrs }
       end
+
+      # Convert procedures
       llvm-procedures = for map(proc from procedures):
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body, is-closure) =>
@@ -480,15 +531,19 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       end
 
       # Create main()
-      main-identifiers = identifiers
+      init-identifiers = identifiers
         .insert(AC.c-bind("argc", T.t-word), LocalIdentifier)
         .insert(AC.c-bind("argv", T.t-pointer(T.t-pointer(T.t-byte))), LocalIdentifier)
-      main = L.Procedure("init", struct-pyret-value, [
+      init-instrs = llvm-globals-init.instrs 
+        + l-expr-to-llvm(init, symbol-table, init-identifiers, adts)
+      init-proc = L.Procedure("init", struct-pyret-value, [
         L.Parameter("argc", K.Integer(32), []),
         L.Parameter("argv", K.Pointer(K.Pointer(K.Integer(8), none), none), [])
-      ], [L.NoUnwind], l-expr-to-llvm(init, symbol-table, main-identifiers, adts))
+      ], [L.NoUnwind], init-instrs)
 
       # Instantiate module
-      L.Module(llvm-globals, link(main, llvm-procedures))
+      prog-globals = llvm-globals-init.globals + llvm-globals
+      prog-procs   = link(init-proc, llvm-procedures)
+      L.Module(prog-globals, prog-procs)
   end
 end
