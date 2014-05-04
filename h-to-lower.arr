@@ -21,8 +21,9 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-lam(f, env)           => plug(AL.l-val(AL.l-closure(f, env)))
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
-      empty-table = AL.l-copy(AC.c-bind("global.empty-table", T.t-record([])))
-      cases(List<AH.HField>) fields:
+      unloaded-name = AC.c-bind(gensym("unload-global.empty-table."), T.t-record([]))
+      empty-table = AL.l-copy(unloaded-name)
+      build-table = cases(List<AH.HField>) fields:
         | empty      => 
           plug(empty-table)
         | link(f, r) =>
@@ -39,6 +40,8 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
           end, plug(first-update))
           AL.l-let(new-copy, empty-table, updates)
       end
+      global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
+      AL.l-let(unloaded-name, AL.l-unbox(global-empty-table), build-table)
     | h-update(table, fields) =>
       fields.foldr(fun(field, next):
         cases(AH.HField) field:

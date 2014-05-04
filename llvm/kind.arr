@@ -46,7 +46,7 @@ sharing:
           + " (" 
           + params.join-str(", ") 
           + if is-vararg: ", ..." else: "" end
-          + ")"
+          + ")*"
       | Struct(fields, packed) =>
         inside = "{ " + fields.join-str(", ") + " }"
         if packed: "<" + inside + ">" else: inside end

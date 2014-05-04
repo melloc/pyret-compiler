@@ -32,12 +32,13 @@ exit:                                      ; preds = %comparison
 }
 
 
-define void @table-insert(i8** %PJLArray, i64 %key, i8* %to-insert) nounwind {
+define i8* @table-insert(i8** %PJLArray, i64 %key, i8* %to-insert) nounwind {
   %J_Error = alloca %struct.J_UDY_ERROR_STRUCT              ;; Allocate space for J_Error, which contains Judy errors
   %ins-ret = call i8** @JudyLIns(i8** %PJLArray, i64 %key, %struct.J_UDY_ERROR_STRUCT* %J_Error) ;; Make a call to JudyLIns
   store i8* %to-insert, i8** %ins-ret                       ;; Store pointer to a there. 
   ;; At some point, we should do some checking for errors here.
-  ret void
+  %table-deref = load i8** %PJLArray
+  ret i8* %table-deref
 }
 
 define i8* @table-lookup(i8* %PJLArray, i64 %key) nounwind {

@@ -428,7 +428,8 @@ sharing:
     cases(OpCode) self:
       | Invalid => "invalid"
       | Ret(typ, value) =>
-        "ret " + typ.tostring()
+        "ret " 
+          + typ.tostring() + " " 
           + value.tostring()
       | RetVoid =>
         "ret void"
@@ -608,8 +609,17 @@ sharing:
 end
 
 data GlobalMode:
-  | GlobalConstant(value :: K.ValueKind)
+  | GlobalConstant
   | GlobalVariable
+sharing:
+  tostring(self):
+    cases(GlobalMode) self:
+      | GlobalConstant =>
+        "constant"
+      | GlobalVariable =>
+        "global"
+    end
+  end
 end
 
 data Global:
@@ -618,27 +628,34 @@ data Global:
                visibility    :: Visibility,
                storage-class :: Option<StorageClass>,
                thread-local  :: Option<ThreadLocalMode>,
+               unnamed-addr  :: Boolean,
                mode          :: GlobalMode,
                ty            :: K.TypeKind,
+               val           :: Option<K.ValueKind>,
                section       :: Option<String>,
                align         :: Option<Number>)
 sharing:
   tostring(self) -> String:
     cases(Global) self:
       | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local,
-                   mode, ty, section, align) =>
+                   unnamed-addr, mode, ty, val, section, align) =>
         "@" + var-name + " = " + linkage.tostring() + " " 
           + cases(Option<StorageClass>) storage-class:
-              | some(sc) => sc.tostring()
+              | some(sc) => sc.tostring() + " "
               | none     => ""
             end
           + cases(Option<ThreadLocalMode>) thread-local:
-              | some(t)  => t.tostring()
+              | some(t)  => t.tostring() + " "
               | none     => ""
             end
-          + cases(GlobalMode) mode:
-              | GlobalConstant(value) => "constant " + ty.tostring() + " " + value.tostring()
-              | GlobalVariable        => "global " + ty.tostring()
+          + if unnamed-addr: "unnamed_addr " else: "" end
+          + mode.tostring() + " "
+          + ty.tostring() + " " 
+          + cases(Option<K.ValueKind>) val:
+              | some(v) =>
+                v.tostring()
+              | none    => 
+                ""
             end
           + cases(Option<String>) section:
               | some(s) => ", section \"" + s + "\""
