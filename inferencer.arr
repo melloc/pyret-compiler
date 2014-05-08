@@ -56,7 +56,17 @@ fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
           + cg-expr(body) + cg-lettable(val)
           + [eq-con(t-expr(expr), t-expr(body))]
     | h-try(body, bind, _except) => 
-        # TODO TODO TODO 
+        cases (T.Type) bind.ty:
+          | t-blank => # TODO
+                       # TODO not sure what to do here. 
+                       # We *could* look through and find the raise type
+                       # as well as the return type, but that would be hard. 
+          | else => [eq-con(t-var(bind.id), t-ty(bind.ty))]
+        end
+          + cg-expr(body) + cg-expr(_except)
+          + [eq-con(t-expr(expr), t-expr(body)),
+             eq-con(t-expr(expr), t-expr(_except)),
+             eq-con(t-expr(body), t-expr(_except))]
     | h-if(c, t, e) => 
         cases (T.Type) c.ty:
           | t-blank => [eq-con(t-id(c.id), t-var(c.id))]
@@ -65,7 +75,7 @@ fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
           + cg-expr(t) + cg-expr(e) 
           + [eq-con(t-expr(expr), t-expr(t)),
              eq-con(t-expr(expr), t-expr(e)),
-             eq-con(t-expr(t), t-expr(e))] # TODO is this an infinite loop?
+             eq-con(t-expr(t), t-expr(e))] # is this an infinite loop?
     | h-cases(type, val, branches, _else) => # TODO
   end
 end
@@ -97,7 +107,15 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
           | t-blank => [eq-con(t-box(t-id(id.id)), t-var(id.id))]
           | else => [eq-con(t-box(t-id(id.id)), t-ty(id.ty))]
         end
-    | h-lam(f, closure) => # TODO TODO TODO this is hard...
+    | h-lam(f, closure) => 
+        cases (T.Type) f.ty:
+           | t-blank => [eq-con(t-id(f.id), t-var(f.id))]
+           | else => [eq-con(t-id(f.id), t-ty(f.ty))]
+        end
+         + cases (T.Type) closure.ty:
+             | t-blank => [eq-con(t-id(closure.id), t-var(closure.id))]
+             | else => [eq-con(t-id(colsure.id), t-ty(closure.ty))]
+           end
     | h-app(f, args) => 
         cases (T.Type) f.ty:
           | t-blank => [eq-con(t-id(f.id), t-var(f.id))]
@@ -126,13 +144,23 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
                               end
                             end))]
     | h-update(super, fields) => 
-        # TODO for each field, we need these constraints:
-        #  - field exists and has same type (type of ID equals field lookup)
-        #  - regular ID constraint
-        # Additionally, we need this constraint:
-        #  - type of this lettable is equal to type of super
-    | h-extend(super, fields) => 
-    | h-env(field) => 
+        cases (T.Type) super.ty:
+          | t-blank => 
+              for fold(s from [eq-con(t-id(super.id), t-var(super.id))],
+                       f from fields):
+                [cases (T.Type) f.value.ty:
+                   | t-blank => eq-con(t-id(f.value.id), t-var(f.value.id))
+                   | else => eq-con(t-id(f.value.id), t-ty(f.value.ty))
+                 end,
+                 eq-con(t-id(f.value.id), 
+                        t-lookup(t-id(super.id), f.name.name))] + s
+              end
+          # t-record isn't going to happen
+          | else => raise("Error: cannot unify (message TODO)")
+        end
+         + [eq-con(t-lettable(lettable), t-var(super.id))]
+    | h-extend(super, fields) => # TODO
+    | h-env(field) => # TODO
     | h-dot(obj, field) => 
         cases (T.Type) obj.ty:
           | t-blank => 
@@ -174,6 +202,14 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
 end
 
 
+fun cg-func(func :: AH.NamedFunc) -> List<Constraint>:
+  cases (AH.NamedFunc) func: 
+    | named-func(name, args, body, ret, is-closure) => 
+        cg-expr(body) + # TODO rest of stuff here...
+  end
+end
+
+
 fun occurs(lhs :: Term, rhs :: Term) -> Boolean:
   if lhs == rhs:
     true
@@ -205,7 +241,7 @@ fun extend-replace(l :: Term,
       cases (Term) inside:
         | t-box(val) => t-box(replace(l, r, val))
         | t-arrow(args, ret) => 
-            # TODO make sure this map expression truly works...
+            # WARNING make sure this map expression truly works...
             t-arrow(map(replace(l, r, _), args), replace(l, r, ret))
         | t-record(fields) => 
             t-record(for map(f from fields):
@@ -257,33 +293,7 @@ fun unify-subs(cons :: List<Constraint>,
   else:
     l = cons.first.lhs
     r = cons.first.rhs
-    cases (Term) subs.first.lhs:
-      # TODO consolidate all of these...
-      | t-expr(val) => 
-          cases (Option<Term>) lookup(l, subs):
-            | some(thing) => 
-                unify-subs(link(eq-con(thing, r), cons.rest), subs)
-            | none => 
-                unify-subs(cons.rest, extend-replace(l, r, subs))
-      | t-lettable(val) => 
-          cases (Option<Term>) lookup(l, subs):
-            | some(thing) => 
-                unify-subs(link(eq-con(thing, r), cons.rest), subs)
-            | none => 
-                unify-subs(cons.rest, extend-replace(l, r, subs))
-      | t-id(val) => 
-          cases (Option<Term>) lookup(l, subs):
-            | some(thing) => 
-                unify-subs(link(eq-con(thing, r), cons.rest), subs)
-            | none => 
-                unify-subs(cons.rest, extend-replace(l, r, subs))
-      | t-var(val) => 
-          cases (Option<Term>) lookup(l, subs):
-            | some(thing) => 
-                unify-subs(link(eq-con(thing, r), cons.rest), subs)
-            | none => 
-                unify-subs(cons.rest, extend-replace(l, r, subs))
-          end
+    cases (Term) l:
       | t-ty(val) => 
           cases (Term) r:
             | t-ty(val2) => 
@@ -298,24 +308,41 @@ fun unify-subs(cons :: List<Constraint>,
             # unsubstituted variable on the right-hand side. 
             | else => raise("Cannot unify two incompatible base types")
           end
-      | t-box(val) => # TODO
+      | t-box(val) => 
+          cases (Term) r:
+            | t-box(val2) => 
+                unify-subs(link(eq-con(val, val2), cons.rest), subs)
+            # TODO this might need to be a swap case if there is a variable
+            # on the right hand side of the constraint. 
+            | else => raise("Cannot unify box with non-box")
+          end
       | t-arrow(args, ret) => 
           cases (Term) r:
             | t-arrow(args2, ret2) =>
                 new-cons = [eq-con(ret, ret2)]
                   + for map2(a from args, a2 from args2):
                       eq-con(a, a2)
-                    end + cons
+                    end + cons.rest
                 unify-subs(new-cons, subs)
             | else => raise("Function and non-function")
           end
       | t-record(fields) => 
           cases (Term) r:
             | t-record(fields2) => 
-                unify-subs(map2(eq-con, fields, fields2) + cons, subs)
+                unify-subs(map2(eq-con, fields, fields2) + cons.rest, subs)
             | else => raise("Record and non-record")
           end
-      | t-lookup(obj, field) => 
+      # TODO is this correct? 
+      | t-lookup(obj, field) => raise("Fail? Got t-lookup in unification.")
+      | else =>
+          # This case handles t-expr, t-lettable, t-id, and t-var, all 
+          # of which are basically "variables" at this point. 
+          cases (Option<Term>) lookup(l, subs):
+            | some(thing) => 
+                unify-subs(link(eq-con(thing, r), cons.rest), subs)
+            | none => 
+                unify-subs(cons.rest, extend-replace(l, r, subs))
+          end
     end
   end
 end
@@ -323,20 +350,18 @@ end
 
 fun type-term(t :: Term, subs :: List<Substitution>) -> T.Type:
   cases (Option<Term>) lookup(t, subs):
-    | none => # TODO just return any? Or fail for now? 
+    | none => T.t-any 
     | some(s) => 
         cases (Term) s:
-          | t-expr(expr) => 
-          | t-lettable(lettable) => 
-          | t-id(id) => 
-          | t-var(val) => 
           | t-ty(val) => val
           | t-box(val) => T.t-pointer(type-term(val, subs)) 
           | t-arrow(args, ret) => 
               T.t-arrow(map(type-term(_, subs), args), type-term(ret, subs))
           | t-record(fields) => 
               T.t-record(map(type-term(_, subs), fields))
-          | t-lookup(obj, field) => 
+          | t-lookup(obj, field) => raise("t-lookup in type-term")
+          | else => type-term(s, subs)
+          # WARNING maker sure this doesn't infinite loop...
         end
   end
 end
@@ -372,8 +397,14 @@ fun assign-expr(expr :: AH.HExpr, subs :: List<Substitution>) -> AH.HExpr:
         h-assign(bind.retype-if-blank(type-id(bind.id, subs)),
                  assign-lettable(val, subs), 
                  assign-expr(body, subs))
-    | h-try(body, bind, _except) => # TODO
-    | h-if(c, t, e) => # TODO
+    | h-try(body, bind, _except) => 
+        h-try(assign-expr(body, subs), 
+              body.retype-if-blank(type-id(bind.id, subs)),
+              assign-expr(_except, subs))
+    | h-if(c, t, e) => 
+        h-if(c.retype-if-blank(type-id(c.id, subs)),
+             assign-expr(t, subs),
+             assign-expr(e, subs))
     | h-cases(type, val, branches, _else) => # TODO
   end
 end
@@ -385,18 +416,53 @@ fun assign-lettable(lettable :: AH.HLettable,
     | h-box(id) => h-box(id.retype-if-blank(type-id(id.id, subs)))
     | h-id(id) => h-id(id.retype-if-blank(type-id(id.id, subs)))
     | h-unbox(id) => h-unbox(id.retype-if-blank(type-id(id.id, subs)))
-    | h-lam(f, closure) => # TODO
-    | h-app(f, args) => # TODO
-    | h-obj(fields) => # TODO
-    | h-update(super, fields) => # TODO
-    | h-extend(super, fields) => # TODO
-    | h-env(field) => # TODO
+    | h-lam(f, closure) => 
+        h-lam(f.retype-if-blank(type-id(f.id, subs)), 
+              closure.retype-if-blank(type-id(closure.id, subs)))
+    | h-app(f, args) => 
+        h-app(f.retype-if-blank(type-id(f.id, subs)),
+              for map(a from args): 
+                a.retype-if-blank(type-id(a.id, subs))
+              end)
+    | h-obj(fields) => h-obj(map(assign-field(_, subs), fields))
+    | h-update(super, fields) => 
+        h-update(super.retype-if-blank(type-id(super.id, subs)), 
+                 map(assign-field(_, subs), fields))
+    | h-extend(super, fields) =>
+        h-update(super.retype-if-blank(type-id(super.id, subs)),
+                 map(assign-field(_, subs), fields))
+    | h-env(field) => h-env(field.retype-if-blank(type-id(field.id, subs)))
     | h-dot(obj, field) => 
         h-dot(obj.retype-if-blank(type-id(obj.id, subs)), field)
     | h-colon(obj, field) => 
         h-colon(obj.retype-if-blank(type-id(obj.id, subs)), field)
     | h-get-bang(obj, field) => 
         h-get-bang(obj.retype-if-blank(type-id(obj.id, subs)), field)
+  end
+end
+
+fun assign-field(field :: AH.HField, subs :: List<Substitution>) -> AH.HField:
+  cases (AH.HField) field:
+    | h-field(name, value) => 
+        h-field(name, value.retype-if-blank(type-id(value.id, subs)))
+  end
+end
+
+fun assign-func(func :: AH.NamedFunc, 
+                subs :: List<Substitution>) -> AH.NamedFunc:
+  cases (AH.NamdeFunc) func: 
+    | named-func(name, args, body, ret, is-closure) => 
+        new-ret = cases (T.Type) ret:
+          | t-blank => # TODO infer
+          | else => # TODO Not entirely sure yet. Probably an error. 
+        end
+        named-func(name, 
+                   for map(a from args): 
+                     a.retype-if-blank(type-id(a.id, subs)) 
+                   end,
+                   assign-expr(body, subs),
+                   new-ret, # TODO get new return type? 
+                   is-closure)
   end
 end
 
@@ -408,5 +474,20 @@ fun infer-prog(program):
   globals = program.globals
   expr = program.expr
 
-  # TODO the rest of this...
+  cons = for fold(s from cg-expr(expr), f from funcs): s + cg-func(f) end
+
+  subs = unify-subs(cons, empty)
+
+  new-expr = assign-expr(expr, subs)
+  new-funcs = map(assign-func(_, subs), funcs)
+
+  # TODO datas
+  new-datas = datas
+  # TODO globals? 
+  new-globals = globals
+
+  {globals : new-globals,
+   datas : new-datas,
+   funcs : new-funcs,
+   expr : new-expr}
 end
