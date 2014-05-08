@@ -32,134 +32,136 @@ declare i32 @__gmp_printf(i8*, ...)
 
 ;; Pyret Number
 ;; Type: 0
+@pyret-number-type = private constant i32 0
 ;; Variants:
 ;;  - Rational (0)
+@pyret-number-rational = private constant i32 0
 ;;  - Float (1)
-%struct.pyret-number = type { i32, i8, %struct.__mpf_struct* }
+@pyret-number-float = private constant i32 1
+;; Field: 0
+@pyret-number-field = private constant i64 0
 
-define %struct.pyret-number* @allocate-float() {
-    ;; Create GMP Rational Number
-    %sizeof.__mpf_struct-tmp = getelementptr %struct.__mpf_struct* null, i64 1
-    %sizeof.__mpf_struct = ptrtoint %struct.__mpf_struct* %sizeof.__mpf_struct-tmp to i64
-    ;; TODO: Fix calculating size
+define %struct.__mpf_struct* @get-float(%struct.pyret-value %number) alwaysinline {
+    %table = extractvalue %struct.pyret-value %number, 2
+    %key = load i64* @pyret-number-field
+    %gmp-num-ptr = call i8* @table-lookup(i8* %table, i64 %key)
+    %gmp-num = bitcast i8* %gmp-num-ptr to %struct.__mpf_struct*
+    ret %struct.__mpf_struct* %gmp-num
+}
+
+define %struct.pyret-value @allocate-float() {
+    ;; Create GMP Float Number
     %gmp-num-mem = call noalias i8* @malloc(i64 32) nounwind
     %gmp-num-mem-pointer = bitcast i8* %gmp-num-mem to %struct.__mpf_struct*
     call void @__gmpf_init(%struct.__mpf_struct* %gmp-num-mem-pointer)
 
-    ;; Set up Pyret Rational Number
-    %sizeof.pyret-number-tmp = getelementptr %struct.pyret-number* null, i64 1
-    %sizeof.pyret-number = ptrtoint %struct.pyret-number* %sizeof.pyret-number-tmp to i64
-    ;; TODO: Fix calculating size
-    %py-num-mem = call noalias i8* @malloc(i64 13) nounwind
-    %py-num-mem-pointer = bitcast i8* %py-num-mem to %struct.pyret-number*
+    ;; Set up Pyret Number by setting type field
+    %type-value = load i32* @pyret-number-type
+    %py-num-tmp-a = insertvalue %struct.pyret-value undef, i32 %type-value, 0
 
-    ;; Set type field to Pyret Number
-    %type-field = getelementptr %struct.pyret-number* %py-num-mem-pointer, i64 0, i32 0
-    store i32 0, i32* %type-field
+    ;; Set variant field to Pyret Float Number
+    %variant-value = load i32* @pyret-number-float
+    %py-num-tmp-b = insertvalue %struct.pyret-value %py-num-tmp-a, i32 %variant-value, 1
 
-    ;; Set variant field to Pyret Rational Number
-    %variant-field = getelementptr %struct.pyret-number* %py-num-mem-pointer, i64 0, i32 1
-    store i8 0, i8* %variant-field
+    ;; Allocate space for table and set number field to GMP number
+    %table-ptr = alloca i8*
+    store i8* null, i8** %table-ptr
+    %gmp-bitcast = bitcast %struct.__mpf_struct* %gmp-num-mem-pointer to i8*
+    %key = load i64* @pyret-number-field
+    call i8* @table-insert(i8** %table-ptr, i64 %key, i8* %gmp-bitcast)
+    %table = load i8** %table-ptr
 
-    ;; Set field to GMP number
-    %mpf-field = getelementptr %struct.pyret-number* %py-num-mem-pointer, i64 0, i32 2
-    store %struct.__mpf_struct* %gmp-num-mem-pointer, %struct.__mpf_struct** %mpf-field
-    ret %struct.pyret-number* %py-num-mem-pointer
+    ;; Set table field to new Judy Array, and create final Pyret Number
+    %py-num = insertvalue %struct.pyret-value %py-num-tmp-b, i8* %table, 2
+    ret %struct.pyret-value %py-num
 }
 
-define %struct.pyret-number* @initialize-integer(i8* %str) {
-    %pyret-float = call %struct.pyret-number* @allocate-float()
-    %gmp-float-field   = getelementptr %struct.pyret-number* %pyret-float, i64 0, i32 2
-    %gmp-float = load %struct.__mpf_struct** %gmp-float-field
+define %struct.pyret-value @initialize-integer(i8* %str) {
+    %pyret-float = call %struct.pyret-value @allocate-float()
+    %gmp-float = call %struct.__mpf_struct* @get-float(%struct.pyret-value %pyret-float)
     call i32 @__gmpf_set_str(%struct.__mpf_struct* %gmp-float, i8* %str, i32 10)
-    ret %struct.pyret-number* %pyret-float
+    ret %struct.pyret-value %pyret-float
 }
 
 
-define %struct.pyret-number* @float-arithmetic-method(%struct.pyret-number* %a, %struct.pyret-number* %b, void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* %f) {
+define %struct.pyret-value @float-arithmetic-method(%struct.pyret-value %a, %struct.pyret-value %b, void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* %f) {
     ;; Allocate the result
-    %c-pyret-number = call %struct.pyret-number* @allocate-float()
-    %c-mpf-field    = getelementptr %struct.pyret-number* %c-pyret-number, i64 0, i32 2
-    %c-mpf = load %struct.__mpf_struct** %c-mpf-field
+    %c-pyret-value = call %struct.pyret-value @allocate-float()
+    %c-mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %c-pyret-value)
 
-    ;; We assume that a is a Rational Number
-    ;; Currently we only operate on b if it is also a Rational Number.
-    ;; At some point it would be nice to convert it to a Rational Number.
+    ;; We assume that a is a Float Number
+    ;; Currently we only operate on b if it is also a Float Number.
+    ;; At some point it would be nice to convert it to a Float Number.
     ;; b should be a Number
-    %b-type-field = getelementptr %struct.pyret-number* %b, i64 0, i32 0
-    %b-type-value = load i32* %b-type-field
+    %b-type-value = extractvalue %struct.pyret-value %b, 0
     %b-type-is-zero = icmp eq i32 %b-type-value, 0
     br i1 %b-type-is-zero, label %compare-variant, label %exit
 
     compare-variant:
     ;; Now we want to check b's variant
-    %b-variant-field = getelementptr %struct.pyret-number* %b, i64 0, i32 1
-    %b-variant-value = load i8* %b-variant-field
-    %b-variant-is-zero = icmp eq i8 %b-variant-value, 0
-    br i1 %b-variant-is-zero, label %case-float, label %case-float-else
+    %b-variant-value = extractvalue %struct.pyret-value %b, 1
+    %b-variant-is-one = icmp eq i32 %b-variant-value, 1
+    br i1 %b-variant-is-one, label %case-float, label %case-float-else
 
     case-float:
-    %a-mpf-field = getelementptr %struct.pyret-number* %a, i64 0, i32 2
-    %a-mpf = load %struct.__mpf_struct** %a-mpf-field
-    %b-mpf-field = getelementptr %struct.pyret-number* %b, i64 0, i32 2
-    %b-mpf = load %struct.__mpf_struct** %b-mpf-field
+    %a-mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %a)
+    %b-mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %b)
     call void %f(%struct.__mpf_struct* %c-mpf, %struct.__mpf_struct* %a-mpf, %struct.__mpf_struct* %b-mpf)
     ;; Done. Now exit.
     br label %exit
 
     case-float-else:
-    ;; Currently we only support Rationals, so exit.
+    ;; Currently we only support Floats, so exit.
     br label %exit
 
     exit:
-    ret %struct.pyret-number* %c-pyret-number
+    ret %struct.pyret-value %c-pyret-value
 }
 
-define %struct.pyret-number* @rational-plus-method(%struct.pyret-number* %a, %struct.pyret-number* %b) {
-    %result = call %struct.pyret-number* @float-arithmetic-method(
-            %struct.pyret-number* %a, 
-            %struct.pyret-number* %b, 
+define %struct.pyret-value @rational-plus-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %result = call %struct.pyret-value @float-arithmetic-method(
+            %struct.pyret-value %a, 
+            %struct.pyret-value %b, 
             void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* @__gmpf_add)
-    ret %struct.pyret-number* %result
+    ret %struct.pyret-value %result
 }
 
-define %struct.pyret-number* @rational-minus-method(%struct.pyret-number* %a, %struct.pyret-number* %b) {
-    %result = call %struct.pyret-number* @float-arithmetic-method(
-            %struct.pyret-number* %a, 
-            %struct.pyret-number* %b, 
+define %struct.pyret-value @rational-minus-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %result = call %struct.pyret-value @float-arithmetic-method(
+            %struct.pyret-value %a, 
+            %struct.pyret-value %b, 
             void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* @__gmpf_sub)
-    ret %struct.pyret-number* %result
+    ret %struct.pyret-value %result
 }
 
-define %struct.pyret-number* @rational-divide-method(%struct.pyret-number* %a, %struct.pyret-number* %b) {
-    %result = call %struct.pyret-number* @float-arithmetic-method(
-            %struct.pyret-number* %a, 
-            %struct.pyret-number* %b, 
+define %struct.pyret-value @rational-divide-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %result = call %struct.pyret-value @float-arithmetic-method(
+            %struct.pyret-value %a, 
+            %struct.pyret-value %b, 
             void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* @__gmpf_div)
-    ret %struct.pyret-number* %result
+    ret %struct.pyret-value %result
 }
 
-define %struct.pyret-number* @rational-times-method(%struct.pyret-number* %a, %struct.pyret-number* %b) {
-    %result = call %struct.pyret-number* @float-arithmetic-method(
-            %struct.pyret-number* %a, 
-            %struct.pyret-number* %b, 
+define %struct.pyret-value @rational-times-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %result = call %struct.pyret-value @float-arithmetic-method(
+            %struct.pyret-value %a, 
+            %struct.pyret-value %b, 
             void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* @__gmpf_mul)
-    ret %struct.pyret-number* %result
+    ret %struct.pyret-value %result
 }
 
 @math.rational-print-string = private unnamed_addr constant [5 x i8] c"%Qd\0A\00"
 @math.float-print-string = private unnamed_addr constant [5 x i8] c"%Ff\0A\00"
 
-define void @print-pyret-number(%struct.pyret-number* %number) {
+define void @print-pyret-value(%struct.pyret-value %number) {
     ;; Get the field
-    %mpf-field    = getelementptr %struct.pyret-number* %number, i64 0, i32 2
-    %mpf = load %struct.__mpf_struct** %mpf-field
+    %mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %number)
 
     ;; Get the variant tag
-    %variant-field = getelementptr %struct.pyret-number* %number, i64 0, i32 1
-    %variant-value = load i8* %variant-field
-    %variant-is-zero = icmp eq i8 %variant-value, 0
-    br i1 %variant-is-zero, label %case-float, label %case-float-else
+    %variant-value = extractvalue %struct.pyret-value %number, 1
+    %float-tag = load i32* @pyret-number-float
+    %is-float = icmp eq i32 %variant-value, %float-tag
+    br i1 %is-float, label %case-float, label %case-float-else
 
     case-float:
     %printed = call i32 (i8*, ...)* @__gmp_printf(i8* getelementptr inbounds ([5 x i8]* @math.float-print-string, i32 0, i32 0), %struct.__mpf_struct* %mpf)

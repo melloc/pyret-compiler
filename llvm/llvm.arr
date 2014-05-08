@@ -274,7 +274,7 @@ sharing:
   tostring(self):
     cases(SwitchBranch) self:
       | switch-branch(intty, value, label) =>
-        intty.tostring() + " " + value.tostring() + ", label " + label + "\n"
+        intty.tostring() + " " + value.tostring() + ", label %" + label + "\n"
     end
   end
 end
@@ -351,7 +351,7 @@ data OpCode:
         op2 :: K.ValueKind)
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
-  | Load(typ :: K.TypeKind, ptr)
+  | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
   | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
           value-typ   :: K.TypeKind,
           value       :: K.ValueKind,
@@ -368,7 +368,7 @@ data OpCode:
                 #ordering ::
                 #alignment ::
                 # TODO TODO TODO
-  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val, access :: List<H.Pair<K.TypeKind, Number>>)
+  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val :: K.ValueKind, idxs :: List<Index>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -428,7 +428,8 @@ sharing:
     cases(OpCode) self:
       | Invalid => "invalid"
       | Ret(typ, value) =>
-        "ret " + typ.tostring()
+        "ret " 
+          + typ.tostring() + " " 
           + value.tostring()
       | RetVoid =>
         "ret void"
@@ -437,7 +438,7 @@ sharing:
       | BrUnconditional(dest-label :: String) =>
         "br " + dest-label
       | Switch(intty, value, default, branches) =>
-        "switch " + intty.tostring() + " " + value.tostring() + ", label " + default
+        "switch " + intty.tostring() + " " + value.tostring() + ", label %" + default
           + cases(List) branches:
               | empty => ""
               | link(_, _) =>
@@ -520,13 +521,11 @@ sharing:
               | some(val) => " !nontemporal !" + val.tostring()
             end
       | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
-      | GetElementPtr(inbound, pty, val, accesses) =>
+      | GetElementPtr(inbound, pty, val, idxs) =>
         "getelementptr " + if inbound: "inbound " else: "" end + pty.tostring() + "*"
-          + for fold(base from "", access from accesses):
-              cases(H.Pair) access:
-                | pair(ty, idx) => base + ", " + ty.tostring() + " " + idx.tostring()
-              end
-            end
+          + for map(idx from idxs):
+              idx.tostring()
+            end.join-str(", ")
       | Trunc    =>
       | ZExt     =>
       | SExt     =>
@@ -610,8 +609,17 @@ sharing:
 end
 
 data GlobalMode:
-  | GlobalConstant(value :: K.ValueKind)
+  | GlobalConstant
   | GlobalVariable
+sharing:
+  tostring(self):
+    cases(GlobalMode) self:
+      | GlobalConstant =>
+        "constant"
+      | GlobalVariable =>
+        "global"
+    end
+  end
 end
 
 data Global:
@@ -620,27 +628,34 @@ data Global:
                visibility    :: Visibility,
                storage-class :: Option<StorageClass>,
                thread-local  :: Option<ThreadLocalMode>,
+               unnamed-addr  :: Boolean,
                mode          :: GlobalMode,
                ty            :: K.TypeKind,
+               val           :: Option<K.ValueKind>,
                section       :: Option<String>,
                align         :: Option<Number>)
 sharing:
   tostring(self) -> String:
     cases(Global) self:
       | GlobalDecl(var-name, linkage, visibility, storage-class, thread-local,
-                   mode, ty, section, align) =>
+                   unnamed-addr, mode, ty, val, section, align) =>
         "@" + var-name + " = " + linkage.tostring() + " " 
           + cases(Option<StorageClass>) storage-class:
-              | some(sc) => sc.tostring()
+              | some(sc) => sc.tostring() + " "
               | none     => ""
             end
           + cases(Option<ThreadLocalMode>) thread-local:
-              | some(t)  => t.tostring()
+              | some(t)  => t.tostring() + " "
               | none     => ""
             end
-          + cases(GlobalMode) mode:
-              | GlobalConstant(value) => "constant " + ty.tostring() + " " + value.tostring()
-              | GlobalVariable        => "global " + ty.tostring()
+          + if unnamed-addr: "unnamed_addr " else: "" end
+          + mode.tostring() + " "
+          + ty.tostring() + " " 
+          + cases(Option<K.ValueKind>) val:
+              | some(v) =>
+                v.tostring()
+              | none    => 
+                ""
             end
           + cases(Option<String>) section:
               | some(s) => ", section \"" + s + "\""

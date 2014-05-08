@@ -105,10 +105,7 @@ end
 fun get-symbols-expr(expr :: AL.Expression) -> Set<String>:
   cases(AL.Expression) expr:
     | l-switch(value, branches, default) =>
-      default-symbols = cases(Option<AL.Expression>) default:
-        | some(e) => get-symbols-expr(e)
-        | none    => empty-set
-      end
+      default-symbols = get-symbols-expr(default)
       for fold(current from default-symbols, branch from branches):
         branch-symbols = get-symbols-expr(branch.body)
         current.union(branch-symbols)
@@ -124,6 +121,7 @@ fun get-symbols-expr(expr :: AL.Expression) -> Set<String>:
     | l-assign(id, val, body) =>
       get-symbols-expr(body)
     | l-ret(id)    => empty-set
+    | l-exit(message) => empty-set
   end
 end
 
@@ -135,8 +133,8 @@ bytes = K.Pointer(byte, none)
 bytess = K.Pointer(bytes, none)
 double-word = K.Struct([word, word], false)
 closure-type = K.Struct([word, bytes], false)
-closure-parameter = L.Parameter("env.closure", bytess, [L.Nest])
-struct-pyret-value = K.Struct([K.Integer(32), K.Integer(32), bytes], false)
+closure-parameter = L.Parameter("env.closure", bytes, [L.Nest])
+struct-pyret-value = K.TypeIdentifier("struct.pyret-value")
 
 fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: IdentifierTable) -> K.TypeKind:
     # Make sure we have a usable type
@@ -153,7 +151,8 @@ fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: Iden
     end
     cases(T.Type) selected-type:
       | t-blank =>
-        raise("Avast, thar be boogs! This suggests that there is a bug in the type inferencer and you aren't using annotations.")
+        print("Avast, thar be boogs! This suggests that there is a bug in the type inferencer and you aren't using annotations.")
+        struct-pyret-value
       | t-any   =>
         struct-pyret-value
       | t-name(id)           =>
@@ -161,17 +160,13 @@ fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: Iden
       | t-arrow(args, ret)   =>
         K.FunctionType(ann-to-type(ret, none, identifiers), for map(arg from args):
           ann-to-type(arg, none, identifiers)
-        end)
+        end, false)
       | t-method(args, ret)  =>
         K.FunctionType(ann-to-type(ret), for map(arg from args):
           ann-to-type(arg, none, identifiers)
-        end)
-      | t-record(fields)     =>
-        K.Struct(for map(field from fields):
-          cases(T.TypeField) field:
-            | t-field(_, name, ann) => K.TypeField(name, ann-to-type(ann, none, identifiers))
-          end
         end, false)
+      | t-record(fields)     =>
+        bytes
       | t-void        =>
         K.Void
       | t-byte        =>
@@ -181,14 +176,14 @@ fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: Iden
       | t-number      =>
         struct-pyret-value
       | t-pointer(ty) =>
-        K.Pointer(ann-to-type(ty, none, identifiers))
+        K.Pointer(ann-to-type(ty, none, identifiers), none)
     end
 end
 
 fun prepend-env-to-type(ty :: K.TypeKind) -> K.TypeKind:
   cases(K.TypeKind) ty:
-    | FunctionType(ret, params) =>
-      K.FunctionType(ret, link(bytes, params))
+    | FunctionType(ret, params, is-vararg) =>
+      K.FunctionType(ret, link(bytes, params), is-vararg)
     | else =>
       raise("LLVM type not capable of having argument prepended: " + ty.tostring())
   end
@@ -212,20 +207,61 @@ fun l-value-to-type(v :: AL.Value) -> K.TypeKind:
   end
 end
 
+fun initialize-constant(constant :: AC.Global) -> { globals : List<L.Global>, instrs : List<L.Instruction> }:
+  cases(AC.Global) constant:
+    | c-str(name, val) =>
+      raise("Strings not yet supported")
+    | c-num(name, val) =>
+
+      # Prep string for initialization
+      global-str   = val.tostring-fixed(10)
+      num-str-name = gensym("num-init.str.")
+      num-str-id   = K.GlobalVariable(num-str-name)
+      num-str-ty   = K.Arr(global-str.length() + 1, byte)
+      access       = K.access(K.Integer(32), K.ConstantInt(0))
+      num-str-arg  = K.ConstantExpr(K.GetElementPtr(true, num-str-ty, num-str-id, [access, access]))
+      visibility   = L.Default
+      mode    = L.GlobalConstant
+      linkage = L.Private
+      value   = K.ConstantString(global-str)
+      globals = [
+          L.GlobalDecl(num-str-name, linkage, visibility, none, none, true, mode, num-str-ty, some(value), none, none)
+      ]
+
+      # Prep initialization instructions
+      num-name     = gensym("num-init.")
+      num-id       = K.LocalVariable(num-name)
+      global-ty    = K.Pointer(struct-pyret-value, none)
+      global-id    = K.GlobalVariable(name.id)
+      instrs  = [
+        L.Assign(num-name, L.Call(false, L.CCC, struct-pyret-value,
+          K.GlobalVariable("initialize-integer"),
+          [
+            L.Argument(bytes, num-str-arg, [])
+          ], [])),
+        L.NoAssign(L.Store(false, struct-pyret-value, num-id, global-ty, global-id, none, none))
+      ]
+      { globals : globals, instrs : instrs }
+  end
+end
+
 fun l-constant-to-llvm(constant :: AC.Global) -> L.Global:
-  ty = cases(AC.Global) constant:
+  var-name   = constant.name.id
+  visibility = L.Default
+  cases(AC.Global) constant:
     | c-str(name, val) =>
-      K.Arr(val.length() + 1, K.Integer(8))
+      ty      = K.Arr(val.length() + 1, byte)
+      mode    = L.GlobalConstant
+      linkage = L.Private
+      value   = K.ConstantString(val)
+      L.GlobalDecl(var-name, linkage, visibility, none, none, true, mode, ty, some(value), none, none)
     | c-num(name, val) =>
-      struct-pyret-value
+      ty      = struct-pyret-value
+      mode    = L.GlobalVariable
+      linkage = L.Internal
+      value   = K.UndefValue
+      L.GlobalDecl(var-name, linkage, visibility, none, none, false, mode, ty, some(value), none, none)
   end
-  mode = cases(AC.Global) constant:
-    | c-str(name, val) =>
-      L.GlobalConstant(K.ConstantString(val))
-    | c-num(name, val) =>
-      L.GlobalVariable
-  end
-  L.GlobalDecl(constant.name.id, L.Internal, L.Default, none, none, mode, ty, none, none)
 end
 
 fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
@@ -242,7 +278,7 @@ fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: I
 
       # Start creating instructions for making trampoline
       malloc-instr = L.Assign(tramp-ptr, malloc(10))
-      init-call = L.NoAssign(L.Call(false, L.CCC, bytes, 
+      init-call = L.NoAssign(L.Call(false, L.CCC, K.Void, 
         K.GlobalVariable("llvm.init.trampoline"),
         [
           L.Argument(bytes, tramp-ptr-id, []),
@@ -260,55 +296,90 @@ fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: I
   end
 end
 
+fun lookup-and-cast(table-id :: K.ValueKind, field-name :: AC.Field, to-type :: K.TypeKind, symbols :: FieldSymbolTable) -> H.Pair<List<L.Instruction>, L.OpCode>:
+  result-name  = gensym("table-lookup-result.")
+  result-id    = K.LocalVariable(result-name)
+  call-op      = L.Call(false, L.CCC, bytes, K.GlobalVariable("table-lookup"), [
+    L.Argument(bytes, table-id, empty),
+    L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty)
+  ], empty)
+  call-instr   = L.Assign(result-name, call-op)
+  bitcast-name = gensym("bitcast.")
+  bitcast-id   = K.LocalVariable(bitcast-name)
+  cast-op      = L.BitCast(bytes, result-id, K.Pointer(to-type, none))
+  cast-instr   = L.Assign(bitcast-name, cast-op)
+  load-op      = L.Load(K.Pointer(to-type, none), bitcast-id)
+  H.pair([call-instr, cast-instr], load-op)
+end
+
 fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> H.Pair<List<L.Instruction>, L.OpCode>:
   cases(AL.Lettable) l:
     | l-undefined => raise("l-undefined not handled")
     | l-update(table, field-name, value) =>
       table-id   = mk-llvm-variable(table, identifiers)
-      call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-insert"), [
-        L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty),
+      table-space-name = gensym("table-space.")
+      table-space-id   = K.LocalVariable(table-space-name)
+      from-id          = mk-llvm-variable(value, identifiers)
+      from-ty          = ann-to-type(value.ty, some(value), identifiers)
+      bitcast-name     = gensym("bitcast-value.")
+      bitcast-id       = K.LocalVariable(bitcast-name)
+      instrs = [
+        L.Assign(table-space-name, L.Alloca(bytes)),
+        L.NoAssign(L.Store(false, bytes, table-id, bytess, table-space-id, none, none)),
+        L.Assign(bitcast-name, L.BitCast(from-ty, from-id, bytes))
+      ]
+      call-op    = L.Call(false, L.CCC, bytes, K.GlobalVariable("table-insert"), [
+        L.Argument(bytess, table-space-id, empty),
         L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty),
-        L.Argument(K.Integer(64), mk-llvm-variable(value, identifiers), empty)
+        L.Argument(bytes, bitcast-id, empty)
       ], empty)
-      H.pair(empty, call-op)
+      H.pair(instrs, call-op)
     | l-lookup(table, field-name) =>
-      ### TODO: This needs more thinking
-      table-id   = mk-llvm-variable(table, identifiers)
-      result-id  = gensym("table-lookup-result-")
-      call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-lookup"), [
-        L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty),
-        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty)
-      ], empty)
-      call-instr = L.Assign(result-id, call-op)
-      H.pair(empty, call-op)
+      object-id    = mk-llvm-variable(table, identifiers)
+      table-name   = gensym("object-table.")
+      table-id     = K.LocalVariable(table-name)
+      ev           = L.Assign(table-name, L.ExtractValue(struct-pyret-value, object-id, [2]))
+      # TODO: Fix this hack. We don't always want to cast to struct-pyret-value.
+      std-lookup   = lookup-and-cast(table-id, field-name, struct-pyret-value, symbols)
+      cases(H.Pair<List<L.Instruction>, L.OpCode>) std-lookup:
+        | pair(instrs, load-op) =>
+          H.pair(link(ev, instrs), load-op)
+      end
     | l-env(field-name) =>
-      call-op    = L.Call(false, L.CCC, K.Integer(64), K.GlobalVariable("table-lookup"), [
-        L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), K.LocalVariable("env.closure"), empty),
-        L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty)
-      ], empty)
-      H.pair(empty, call-op)
+      closure-id = K.LocalVariable("env.closure")
+      lookup-and-cast(closure-id, field-name, struct-pyret-value, symbols)
     | l-copy(table) =>
       table-id   = mk-llvm-variable(table, identifiers)
-      result-id  = gensym("table-lookup-result-")
-      call-op    = L.Call(false, L.CCC, K.Pointer(K.Integer(8), none), K.GlobalVariable("table-copy"), [
-        L.Argument(K.Pointer(K.Pointer(K.Integer(8), none), none), table-id, empty)
+      result-id  = gensym("table-lookup-result.")
+      call-op    = L.Call(false, L.CCC, bytes, K.GlobalVariable("table-copy"), [
+        L.Argument(bytes, table-id, empty)
       ], empty)
       H.pair(empty, call-op)
     | l-box(id) =>
       H.pair(empty, L.Alloca(double-word))
-    | l-unbox(id) =>
-      H.pair(empty, L.Load(double-word, id))
+    | l-unbox(bind) =>
+      bind-id = mk-llvm-variable(bind, identifiers)
+      bind-type = ann-to-type(bind.ty, some(bind), identifiers)
+      load-op = L.Load(bind-type, bind-id)
+      H.pair(empty, load-op)
     | l-application(f, args) =>
-      H.pair(empty, L.Call(false, L.CCC, word-star, mk-llvm-variable(f, identifiers), for map(arg from args):
-        L.Argument(word-star, mk-llvm-variable(arg, identifiers), empty)
+      ret-type = cases(K.TypeKind) ann-to-type(f.ty, some(f), identifiers):
+        | FunctionType(ret, _, _) =>
+          ret
+        | else =>
+          print("Warning! Applying something that might not be a function! This may be an bug in the source program, or in the inferencer. Assuming that it is a function that returns Any.")
+          struct-pyret-value
+      end
+      H.pair(empty, L.Call(false, L.CCC, ret-type, mk-llvm-variable(f, identifiers), for map(arg from args):
+        L.Argument(ann-to-type(arg.ty, some(arg), identifiers), mk-llvm-variable(arg, identifiers), empty)
       end, empty))
     | l-select(field, id, rep) =>
-      select-suffix = gensym("-select-var")
+      select-suffix = gensym("-select-var.")
       load-address  = "load-address"  + select-suffix
       local-address = "local-address" + select-suffix
       H.pair(
         [ L.Assign(load-address,
-                   L.GetElementPtr(false, word-star, id, [H.pair(K.Integer(8), field)]))
+                   L.GetElementPtr(false, word-star, id, [K.access(K.Integer(8), field)]))
         ], L.Load(rep.totype(), load-address))
     | l-val(val) => l-value-to-llvm(val, symbols, identifiers, adts)
   end
@@ -317,25 +388,34 @@ end
 fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers :: IdentifierTable, adts :: List<AL.ADT>) -> List<L.Instruction>:
   cases(AL.Expression) e:
     | l-switch(value, branches, default) => 
-      case-label-suffix = gensym("-case-label")
+      # Build up all branches and labels
+      case-label-suffix = gensym("-case-label.")
       with-labels = for map(branch from branches): 
         H.pair(gensym("branch-") + case-label-suffix, branch) 
       end
+      # Produce jump table
       switch-branches = for map(labeled-branch from with-labels):
         cases(H.Pair) labeled-branch:
           | pair(label, branch) => 
             L.switch-branch(K.Integer(32), K.ConstantInt(branch.constructor.toint()), label)
         end
       end
-      switch-op   = L.Switch(K.Integer(32), mk-llvm-variable(value, identifiers), "default", switch-branches)
+      # We'll need the variant tag
+      variant-name = gensym("variant-tag.")
+      variant-id   = K.LocalVariable(variant-name)
+      ev = L.Assign(variant-name, L.ExtractValue(struct-pyret-value, mk-llvm-variable(value, identifiers), [1]))
+      # We can now create the switch instruction and build up all labels
+      # and branch code
+      default-label = gensym("default-") + case-label-suffix
+      switch-op   = L.NoAssign(L.Switch(K.Integer(32), variant-id, default-label, switch-branches))
       labeled-branches = for map(labeled-branch from with-labels):
         cases(H.Pair) labeled-branch:
           | pair(label, branch) =>
             link(L.Label(label), l-expr-to-llvm(branch.body, symbols, identifiers, adts))
         end
       end
-      end-label = L.Label("end" + case-label-suffix)
-      link(switch-op, H.flatten(labeled-branches))
+      default-branch = link(L.Label(default-label), l-expr-to-llvm(default, symbols, identifiers, adts))
+      link(ev, link(switch-op, H.flatten(labeled-branches) + default-branch))
     | l-let(binding, exp, body) =>
       updated-identifiers = identifiers.insert(binding, LocalIdentifier)
       cases(H.Pair) l-lettable-to-llvm(exp, symbols, identifiers, adts):
@@ -348,7 +428,7 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
           instrs.append(link(L.NoAssign(op), l-expr-to-llvm(body, symbols, identifiers, adts)))
       end
     | l-if(cond, consq, altern) =>
-      if-suffix     = gensym("-if-label")
+      if-suffix     = gensym("-if-label.")
       consq-label   = "consq"  + if-suffix
       altern-label  = "altern" + if-suffix
       cond-split    = L.BrConditional(cond.id, consq-label, altern-label)
@@ -361,20 +441,45 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
           exit-to(altern-branch, end-label),
           [L.Label(end-label)]
         ]))
-    | l-assign(id, val, body) => []
+    | l-assign(id, val, body) =>
+      raise("Assignment not yet supported")
+    | l-exit(message) =>
+      stderr-name = gensym("stderr.")
+      stderr-id   = K.LocalVariable(stderr-name)
+      io-ty       = K.Pointer(K.TypeIdentifier("struct._IO_FILE"), none)
+      fprintf-ty  = K.FunctionType(K.Integer(32), [io-ty, bytes], true)
+      str-ty      = K.Arr(message.length() + 1, byte)
+      str-val     = K.ConstantString(message)
+      access      = K.access(K.Integer(32), K.ConstantInt(0))
+      str-arg     = K.ConstantExpr(K.GetElementPtr(true, str-ty, str-val, [access, access]))
+      [
+        L.Assign(stderr-name, L.Load(K.Pointer(io-ty, none), K.GlobalVariable("stderr"))),
+        L.NoAssign(L.Call(false, L.CCC, fprintf-ty, K.GlobalVariable("fprintf"),
+          [
+            L.Argument(io-ty, stderr-id, []),
+            L.Argument(bytes, str-arg, [])
+          ], [])),
+        L.NoAssign(L.Call(false, L.CCC, K.Void, K.GlobalVariable("exit"),
+          [
+            L.Argument(K.Integer(32), K.ConstantInt(1), [])
+          ], [L.NoReturn])),
+        L.NoAssign(L.Unreachable)
+      ]
     | l-ret(id)    => [L.Ret(ann-to-type(id.ty, some(id), identifiers), mk-llvm-variable(id, identifiers))]
   end
 end
 
+math-fun-type = T.t-arrow([T.t-number, T.t-number], T.t-number)
+
 library = [
-  identifier(AC.c-bind("rational-plus-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-minus-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-times-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-divide-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-equals-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("rational-lte-method", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("global.empty-table", T.t-blank), GlobalIdentifier),
-  identifier(AC.c-bind("print", T.t-blank), GlobalIdentifier)
+  identifier(AC.c-bind("rational-plus-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-minus-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-times-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-divide-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-equals-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-lte-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("global.empty-table", T.t-record([])), GlobalIdentifier),
+  identifier(AC.c-bind("print", T.t-arrow([T.t-any], T.t-any)), GlobalIdentifier)
 ]
 
 fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
@@ -399,14 +504,18 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         end, proc.ret)), GlobalIdentifier)
       end
       constant-identifiers = for map(constant from constants):
-        identifier(AC.c-bind(constant.name.id, T.t-blank), GlobalIdentifier)
+        identifier(constant.name, GlobalIdentifier)
       end
       identifiers = identifier-table(library + proc-identifiers + constant-identifiers)
 
-      # Convert constants and procedures
-      llvm-globals    = for map(constant from constants):
-        l-constant-to-llvm(constant)
+      # Convert constants and set up constant initialization logic
+      llvm-globals      = constants.map(l-constant-to-llvm)
+      llvm-globals-init = for fold(base from {globals : [], instrs : []}, 
+                                   obj from constants.map(initialize-constant)):
+        { globals : base.globals + obj.globals, instrs : base.instrs + obj.instrs }
       end
+
+      # Convert procedures
       llvm-procedures = for map(proc from procedures):
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body, is-closure) =>
@@ -422,15 +531,19 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       end
 
       # Create main()
-      main-identifiers = identifiers
+      init-identifiers = identifiers
         .insert(AC.c-bind("argc", T.t-word), LocalIdentifier)
         .insert(AC.c-bind("argv", T.t-pointer(T.t-pointer(T.t-byte))), LocalIdentifier)
-      main = L.Procedure("main", K.Integer(64), [
+      init-instrs = llvm-globals-init.instrs 
+        + l-expr-to-llvm(init, symbol-table, init-identifiers, adts)
+      init-proc = L.Procedure("init", struct-pyret-value, [
         L.Parameter("argc", K.Integer(32), []),
         L.Parameter("argv", K.Pointer(K.Pointer(K.Integer(8), none), none), [])
-      ], [L.NoUnwind], l-expr-to-llvm(init, symbol-table, main-identifiers, adts))
+      ], [L.NoUnwind], init-instrs)
 
       # Instantiate module
-      L.Module(llvm-globals, link(main, llvm-procedures))
+      prog-globals = llvm-globals-init.globals + llvm-globals
+      prog-procs   = link(init-proc, llvm-procedures)
+      L.Module(prog-globals, prog-procs)
   end
 end

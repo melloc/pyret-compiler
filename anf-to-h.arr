@@ -458,9 +458,13 @@ fun let-lettable(bind :: AC.Bind,
 
         # Determine if closure
 		fvars = get-free-vars(fbody,
-                              set(for map(a from args):
-                                    a.id
-                                  end + builtin-functions)).to-list()
+                              set(builtin-functions
+                                  + for map(a from args):
+                                      a.id
+                                    end 
+                                  + for map(global from globals):
+                                      global.name.id
+                                    end)).to-list()
         is-closure = fvars.length() <> 0
 
         # Lift procedure
@@ -470,7 +474,7 @@ fun let-lettable(bind :: AC.Bind,
         func = AH.named-func(name, args, new-body, ret, is-closure)
         funcs := link(func, funcs)
         if is-closure:
-		  tmp = AC.c-bind(next-val(), T.t-blank)
+		  tmp = AC.c-bind(next-val(), T.t-record([]))
           closure-obj = AH.h-obj(for map(vid from fvars):
             field-name  = AC.c-field-name(vid)
             field-value = AC.c-bind(vid, T.t-blank)
@@ -573,13 +577,13 @@ end
 fun aval-h(val :: N.AVal, vars :: Set<String>) -> AH.HLettable:
   cases (N.AVal) val: 
     | a-num(l, n) => 
-      num-bind = AC.c-bind-loc(l, number-identifier(n), T.t-number)
+      num-bind = AC.c-bind-loc(l, number-identifier(n), T.t-pointer(T.t-number))
       globals := link(AC.c-num(num-bind, n), globals)
-      AH.h-id(num-bind)
+      AH.h-unbox(num-bind)
     | a-str(l, s) => 
-        str-name = AC.c-bind-loc(l, gensym("str.p"), T.t-name("String"))
-        globals := link(AC.c-str(str-name, s), globals)
-        AH.h-id(str-name)
+      str-name = AC.c-bind-loc(l, gensym("str.p"), T.t-pointer(T.t-name("String")))
+      globals := link(AC.c-str(str-name, s), globals)
+      AH.h-unbox(str-name)
     | a-bool(l, b) => 
         if b: AH.h-id(bool-id-true) else: AH.h-id(bool-id-false) end
     | a-undefined(l) => AH.h-undefined

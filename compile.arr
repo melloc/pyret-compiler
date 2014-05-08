@@ -23,8 +23,9 @@ fun compile(input-filename :: String, output-filename :: String):
     prelude   = H.get-file-text("runtime/prelude.ll")
     table-lib = H.get-file-text("runtime/table.ll")
     num-lib   = H.get-file-text("runtime/num.ll")
+    print-lib   = H.get-file-text("runtime/print.ll")
     prog-str  = llvm-rep.tostring()
-    llvm-str  = prelude + table-lib + num-lib + prog-str
+    llvm-str  = prelude + table-lib + num-lib + print-lib + prog-str
     H.put-file-text(output-filename, llvm-str)
 end
 
