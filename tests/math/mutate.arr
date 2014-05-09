@@ -5,4 +5,4 @@ a := a + 2
 a := 1
 a := a + 1
 print(a)
-print("Should print 2")
+#print("Should print 2")

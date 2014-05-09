@@ -43,6 +43,15 @@ sharing:
         ty.tostring() + "*"
       | t-param-name(name, param) =>
     end
+  end,
+  is-composite(self):
+    cases (Type) self:
+      | t-arrow(_, _) => true
+      | t-method(_, _) => true
+      | t-record(_) => true
+      | t-pointer(_) => true
+      | else => false
+    end
   end
 end
 

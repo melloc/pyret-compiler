@@ -19,7 +19,7 @@ sharing:
   end,
   retype-if-blank(self, new-ty :: T.Type) -> Bind:
     when T.is-t-blank(new-ty):
-      raise("Tried to re-type something to t-blank!")
+      raise("Tried to re-type " + self.tostring() + " to t-blank!")
     end
     mk-bind = cases (Bind) self:
       | c-bind(id, ty) => c-bind(id, _)
@@ -30,6 +30,9 @@ sharing:
       | t-any => mk-bind(new-ty)
       | else => self 
     end
+  end,
+  tostring(self):
+    self.id + " :: " + self.ty.tostring()
   end,
   _equals(self :: Bind, other :: Bind) -> Boolean:
     self.id == other.id

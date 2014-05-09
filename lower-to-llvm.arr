@@ -369,7 +369,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
         | FunctionType(ret, _, _) =>
           ret
         | else =>
-          print("Warning! Applying something that might not be a function! This may be an bug in the source program, or in the inferencer. Assuming that it is a function that returns Any.")
+          print("Warning! Applying something that might not be a function! This may be an bug in the source program, or in the inferencer. Assuming that it is a function that returns Any: " + f.ty.tostring())
           struct-pyret-value
       end
       H.pair(empty, L.Call(false, L.CCC, ret-type, mk-llvm-variable(f, identifiers), for map(arg from args):
@@ -495,7 +495,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         cases(AL.Procedure) procedure:
           | l-proc(_, _, _, body, is-closure) => current.union(get-symbols-expr(body))
         end
-      end.to-list()
+      end.union(get-symbols-expr(init)).to-list()
       var count = 0
       symbol-table = field-symbol-table(for map(symbol from symbols):
         count := count + 1
