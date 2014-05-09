@@ -434,7 +434,7 @@ sharing:
       | RetVoid =>
         "ret void"
       | BrConditional(cond-id, consq-label, altern-label) =>
-        "br i1 " + cond-id + ", label " + consq-label + ", label " + altern-label
+        "br i1 %" + cond-id + ", label %" + consq-label + ", label %" + altern-label
       | BrUnconditional(dest-label :: String) =>
         "br " + dest-label
       | Switch(intty, value, default, branches) =>
