@@ -15,6 +15,8 @@ declare void @llvm.init.trampoline(i8*, i8*, i8*)
 
 @stderr = external global %struct._IO_FILE*
 @global.empty-table = internal global i8* null
+@true = internal constant %struct.pyret-value { i32 1, i32 0, i8* null }
+@false = internal constant %struct.pyret-value { i32 1, i32 1, i8* null }
 
 ;; Simple main function for now
 define i64 @main(i32  %argc, i8**  %argv) {

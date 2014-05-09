@@ -26,6 +26,8 @@ declare void @__gmpf_sub(%struct.__mpf_struct*, %struct.__mpf_struct*, %struct._
 
 declare void @__gmpf_div(%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)
 
+declare i32 @__gmpf_cmp(%struct.__mpf_struct*, %struct.__mpf_struct*)
+
 declare void @__gmpf_clear(%struct.__mpf_struct*)
 
 declare i32 @__gmp_printf(i8*, ...)
@@ -148,6 +150,74 @@ define %struct.pyret-value @rational-times-method(%struct.pyret-value %a, %struc
             %struct.pyret-value %b, 
             void (%struct.__mpf_struct*, %struct.__mpf_struct*, %struct.__mpf_struct*)* @__gmpf_mul)
     ret %struct.pyret-value %result
+}
+
+
+define i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    ;; We assume that a is a Float Number
+    ;; Currently we only operate on b if it is also a Float Number.
+    ;; At some point it would be nice to convert it to a Float Number.
+    ;; b should be a Number
+    %b-type-value = extractvalue %struct.pyret-value %b, 0
+    %b-type-is-zero = icmp eq i32 %b-type-value, 0
+    br i1 %b-type-is-zero, label %compare-variant, label %exit
+
+    compare-variant:
+    ;; Now we want to check b's variant
+    %b-variant-value = extractvalue %struct.pyret-value %b, 1
+    %b-variant-is-one = icmp eq i32 %b-variant-value, 1
+    br i1 %b-variant-is-one, label %case-float, label %case-float-else
+
+    case-float:
+    %a-mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %a)
+    %b-mpf = call %struct.__mpf_struct* @get-float(%struct.pyret-value %b)
+    %ret = call i32 @__gmpf_cmp(%struct.__mpf_struct* %a-mpf, %struct.__mpf_struct* %b-mpf)
+    ;; Done. Now exit.
+    ret i32 %ret
+
+    case-float-else:
+    ;; Currently we only support Floats, so exit.
+    br label %exit
+
+    exit:
+    ret i32 -1
+}
+
+define %struct.pyret-value @rational-lt-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp slt i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
+}
+
+define %struct.pyret-value @rational-lte-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp sle i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
+}
+
+
+define %struct.pyret-value @rational-equals-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp eq i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
 }
 
 @math.rational-print-string = private unnamed_addr constant [5 x i8] c"%Qd\0A\00"
