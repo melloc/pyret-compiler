@@ -43,17 +43,27 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
       AL.l-let(unloaded-name, AL.l-unbox(global-empty-table), build-table)
     | h-update(table, fields) =>
-      fields.foldr(fun(field, next):
+      fun mk-update(field :: AH.HField) -> AL.Lettable:
         cases(AH.HField) field:
           | h-field(field-name, value) =>
-            AL.l-seq(AL.l-update(table, field-name, value), next)
+            AL.l-update(table, field-name, value)
         end
-      end, plug(AL.l-undefined))
+      end
+
+      cases(List<AH.HField>) fields:
+        | empty =>
+          raise("empty update?")
+        | link(f, r) =>
+          r.foldr(fun(field, next): 
+            AL.l-seq(mk-update(field), next)
+          end, plug(mk-update(f)))
+      end
     | h-extend(table, fields) =>
       new-copy = gensym("table-copy")
       table-copy = AL.l-copy(table)
       cases(List<HField>) fields:
-        | empty      => plug(table-copy)
+        | empty      => 
+          plug(table-copy)
         | link(f, r) =>
           first-update = cases(AH.HField) f:
             | h-field(field-name, value) => 
@@ -78,15 +88,17 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
   cases(AH.HExpr) e:
     | h-ret(id)                  => plug(AL.l-ret(id))
     | h-let(bind, val, body)     =>
-      h-lettable-to-lower(val, fun(lettable :: AL.Lettable):
-        plug(h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
+      plug(h-lettable-to-lower(val, fun(lettable :: AL.Lettable):
+        h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
           AL.l-let(bind, lettable, expr)
-        end))
-      end)
-    | h-assign(bind, val, body)  => h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
+        end)
+      end))
+    | h-assign(bind, val, body)  => 
+      h-expr-to-lower(body, adts, fun(expr :: AL.Expression):
         AL.l-assign(bind, val, expr)
       end)
-    | h-try(body, bind, _except) => raise("exception handling not yet implemented")
+    | h-try(body, bind, _except) => 
+      raise("exception handling not yet implemented")
     | h-if(cond, consq, altern)  =>
       h-expr-to-lower(consq, adts, fun(lower-consq :: AL.Expression):
         h-expr-to-lower(altern, adts, fun(lower-altern :: AL.Expression):
@@ -159,7 +171,6 @@ fun h-adt-to-lower(adt :: AH.NamedData) -> AL.ADT:
 end
 
 fun h-to-lower(prog) -> AL.Program:
-
   adts = for map(adt from prog.datas):
     h-adt-to-lower(adt)
   end
