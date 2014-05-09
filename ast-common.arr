@@ -18,7 +18,7 @@ sharing:
     end
   end,
   retype-if-blank(self, new-ty :: T.Type) -> Bind:
-    when is-t-blank(new-ty):
+    when T.is-t-blank(new-ty):
       raise("Tried to re-type something to t-blank!")
     end
     new-bind = cases (Bind) self:
@@ -26,10 +26,16 @@ sharing:
       | c-bind-loc(l, id, ty) => c-bind-loc(l, id, _)
     end
     cases (T.Type) self.ty:
-      | t-blank => mk-bind(new-ty)
+      | t-blank => new-bind(new-ty)
       | t-any => # TODO retype this too?
       | else => # TODO maybe just return original? 
     end
+  end,
+  _equals(self :: Bind, other :: Bind) -> Boolean:
+    self.id == other.id
+  end,
+  _lessthan(self :: Bind, other :: Bind) -> Boolean:
+    self.id < other.id
   end
 end
 
@@ -40,4 +46,8 @@ end
 data Global:
   | c-str(name :: Bind, val :: String)
   | c-num(name :: Bind, val :: Number)
+sharing:
+  _lessthan(self :: Global, other :: Global) -> Boolean:
+    self.name < self.name
+  end
 end
