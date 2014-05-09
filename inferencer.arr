@@ -1,5 +1,7 @@
 #lang pyret
 
+provide *
+
 import "types.arr" as T
 import "ast-common.arr" as AC
 import "helpers.arr" as H
