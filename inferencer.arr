@@ -321,7 +321,7 @@ fun cg-lettable(lettable :: AH.HLettable,
           | else => raise("Error: cannot unify (message TODO)")
         end
          + [eq-con(t-lettable(lettable), t-var(super.id))]
-    | h-extend(super, fields) => # TODO
+    | h-extend(super, fields) => [] # TODO
     | h-env(field) => []
     | h-dot(obj, field) => 
         cases (T.Type) obj.ty:
@@ -652,7 +652,7 @@ fun unify-subs(cons :: List<Constraint>,
             | t-id(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-lettable(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-expr(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
-            | t-ty(val) => # TODO
+            | t-ty(val) => raise("t-ty doesn't work with lookup yet")
             | t-box(val) => 
                 cases (Option<Term>) lookup(l, subs):
                   | some(thing) => 
@@ -660,8 +660,7 @@ fun unify-subs(cons :: List<Constraint>,
                   | none => 
                       unify-subs(cons.rest, extend-replace(l, r, subs))
                 end
-            | t-record(fields) => # TODO
-            | t-arrow(args, ret) =>  # TODO
+            | else => raise("Doesn't support " + r.tostring())
             # TODO check that last one. May be bad. 
           end
       | else =>
