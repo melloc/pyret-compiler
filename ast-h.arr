@@ -26,32 +26,40 @@ data HLettable:
   | h-get-bang(obj :: AC.Bind, field :: AC.Field)
 sharing:
   rename(self, _from :: AC.Bind, to :: AC.Bind) -> HLettable:
+    rename-input = maybe-rename(_, _from, to)
     cases(HLettable) self:
       | h-undefined => self
       | h-box(id) =>
-        if id == _from: h-box(to) else: self end
+        h-box(rename-input(id))
       | h-id(id) =>
-        if id == _from: h-id(to) else: self end
+        h-id(rename-input(id))
       | h-unbox(id) =>
-        if id == _from: h-unbox(to) else: self end
+        h-unbox(rename-input(id))
       | h-lam(f, closure) =>
-        if f == _from: h-lam(to, closure) else: self end
+        h-lam(rename-input(f), closure)
       | h-app(f, args) =>
-        if f == _from: h-app(to, args) else: self end
+        h-app(rename-input(f), args.map(rename-input))
       | h-obj(fields :: List<HField>) =>
-        self
+        h-obj(maybe-rename-hfields(fields, _from, to))
       | h-update(obj, fields) =>
-        if obj == _from: h-update(to, fields) else: self end
+        new-obj    = maybe-rename(obj, _from, to)
+        new-fields = maybe-rename-hfields(obj, _from, to)
+        h-update(new-obj, new-fields)
       | h-extend(obj, fields) =>
-        if obj == _from: h-extend(to, fields) else: self end
+        new-obj    = maybe-rename(obj, _from, to)
+        new-fields = maybe-rename-hfields(obj, _from, to)
+        h-extend(new-obj, new-fields)
       | h-env(field) =>
         self
       | h-dot(obj, field) =>
-        if obj == _from: h-dot(to, field) else: self end
+        new-obj = maybe-rename(obj, _from, to)
+        h-dot(new-obj, field)
       | h-colon(obj, field) =>
-        if obj == _from: h-colon(to, field) else: self end
+        new-obj = maybe-rename(obj, _from, to)
+        h-colon(new-obj, field)
       | h-get-bang(obj, field) =>
-        if obj == _from: h-get-bang(to, field) else: self end
+        new-obj = maybe-rename(obj, _from, to)
+        h-get-bang(new-obj, field)
     end
   end
 end
@@ -65,6 +73,15 @@ fun maybe-rename(old :: AC.Bind, _from :: AC.Bind, to :: AC.Bind) -> AC.Bind:
     to
   else:
     old
+  end
+end
+
+fun maybe-rename-hfields(fields :: List<HField>, rename-input :: (AC.Bind, AC.Bind, AC.Bind -> AC.Bind)) -> List<HField>:
+  for map(field from fields):
+    cases(HField) field:
+      | h-field(name, value) =>
+        h-field(name, rename-input(value))
+    end
   end
 end
 
