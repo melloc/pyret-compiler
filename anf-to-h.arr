@@ -454,11 +454,12 @@ fun let-lettable(bind :: AC.Bind,
     | a-lam(l, args, ret, body) =>
         name = gensym("func." + bind.id + ".")
         name-bind = AC.c-bind-loc(l, name, T.t-blank)
-        fbody = aexpr-h(body, vs, binds)
+        fbody = aexpr-h(body, vs, binds).rename(bind, name-bind)
 
         # Determine if closure
 		fvars = get-free-vars(fbody,
                               set(builtin-functions
+                                  + [ name-bind.id ]
                                   + for map(a from args):
                                       a.id
                                     end 
