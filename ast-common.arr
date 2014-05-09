@@ -48,6 +48,6 @@ data Global:
   | c-num(name :: Bind, val :: Number)
 sharing:
   _lessthan(self :: Global, other :: Global) -> Boolean:
-    self.name < self.name
+    self.name < other.name
   end
 end

@@ -62,7 +62,7 @@ default-loc = A.loc("N/A", -1, -1)
 ###################
 
 var datas = []
-var globals :: List<AC.Global> = []
+var globals :: Set<AC.Global> = set([])
 var funcs = []
 
 
@@ -462,7 +462,7 @@ fun let-lettable(bind :: AC.Bind,
                                   + for map(a from args):
                                       a.id
                                     end 
-                                  + for map(global from globals):
+                                  + for map(global from globals.to-list()):
                                       global.name.id
                                     end)).to-list()
         is-closure = fvars.length() <> 0
@@ -474,14 +474,18 @@ fun let-lettable(bind :: AC.Bind,
         func = AH.named-func(name, args, new-body, ret, is-closure)
         funcs := link(func, funcs)
         if is-closure:
-		  tmp = AC.c-bind(next-val(), T.t-record([]))
-          closure-obj = AH.h-obj(for map(vid from fvars):
+          tmp-name   = gensym("obj.closure.")
+		  tmp-obj    = AC.c-bind(tmp-name, T.t-record([]))
+          tmp-update = AC.c-bind(tmp-name + ".update", T.t-record([]))
+          closure-obj = AH.h-obj([])
+          closure-update = AH.h-update(tmp-obj, for map(vid from fvars):
             field-name  = AC.c-field-name(vid)
             field-value = AC.c-bind(vid, T.t-blank)
             AH.h-field(field-name, field-value)
           end)
-		  AH.h-let(tmp, closure-obj,
-            AH.h-let(bind, AH.h-lam(name-bind, tmp), aexpr-h(b, vs, binds)))
+		  AH.h-let(tmp-obj, closure-obj,
+            AH.h-let(bind, AH.h-lam(name-bind, tmp-obj), 
+              AH.h-let(tmp-update, closure-update, aexpr-h(b, vs, binds))))
         else:
           AH.h-let(bind, AH.h-id(name-bind), aexpr-h(b, vs, binds))
         end
@@ -578,11 +582,11 @@ fun aval-h(val :: N.AVal, vars :: Set<String>) -> AH.HLettable:
   cases (N.AVal) val: 
     | a-num(l, n) => 
       num-bind = AC.c-bind-loc(l, number-identifier(n), T.t-pointer(T.t-number))
-      globals := link(AC.c-num(num-bind, n), globals)
+      globals := globals.add(AC.c-num(num-bind, n))
       AH.h-unbox(num-bind)
     | a-str(l, s) => 
       str-name = AC.c-bind-loc(l, gensym("str.p"), T.t-pointer(T.t-name("String")))
-      globals := link(AC.c-str(str-name, s), globals)
+      globals := globals.add(AC.c-str(str-name, s))
       AH.h-unbox(str-name)
     | a-bool(l, b) => 
         if b: AH.h-id(bool-id-true) else: AH.h-id(bool-id-false) end
@@ -607,11 +611,11 @@ end
 fun anf-to-h(prog :: N.AProg):  
   funcs := []
   datas := []
-  globals := []
+  globals := set([])
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))
-        {globals : globals,
+        {globals : globals.to-list(),
          datas : datas,
          funcs : funcs.map(filter-func),
          expr : fbody}
