@@ -31,7 +31,8 @@ data Substitution:
 end
 
 
-fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
+fun cg-expr(expr :: AH.HExpr, 
+            datas :: List<AH.NamedData>) -> List<Constraint>:
   cases (AH.HExpr) expr:
     | h-ret(id) => 
         cases (T.Type) id.ty:
@@ -44,7 +45,7 @@ fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
           | else => [eq-con(t-var(bind.id), t-ty(bind.ty)),
                      eq-con(t-lettable(val), t-ty(bind.ty))]
         end
-          + cg-expr(body) + cg-lettable(val) 
+          + cg-expr(body, datas) + cg-lettable(val) 
           + [eq-con(t-expr(expr), t-expr(body))]
     | h-assign(bind, val, body) =>
         cases (T.Type) bind.ty:
@@ -53,17 +54,17 @@ fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
                               eq-con(t-lettable(val), t-ty(ty))]
           | else => raise("Assignment can only be done to a pointer")
         end
-          + cg-expr(body) + cg-lettable(val)
+          + cg-expr(body, datas) + cg-lettable(val)
           + [eq-con(t-expr(expr), t-expr(body))]
     | h-try(body, bind, _except) => 
         cases (T.Type) bind.ty:
-          | t-blank => # TODO
+          | t-blank => [eq-con(t-var(bind.id), t-ty(T.t-any))]
                        # TODO not sure what to do here. 
                        # We *could* look through and find the raise type
                        # as well as the return type, but that would be hard. 
           | else => [eq-con(t-var(bind.id), t-ty(bind.ty))]
         end
-          + cg-expr(body) + cg-expr(_except)
+          + cg-expr(body, datas) + cg-expr(_except, datas)
           + [eq-con(t-expr(expr), t-expr(body)),
              eq-con(t-expr(expr), t-expr(_except)),
              eq-con(t-expr(body), t-expr(_except))]
@@ -72,11 +73,63 @@ fun cg-expr(expr :: AH.HExpr) -> List<Constraint>:
           | t-blank => [eq-con(t-id(c.id), t-var(c.id))]
           | else => [eq-con(t-id(c.id), t-ty(c.ty))]
         end
-          + cg-expr(t) + cg-expr(e) 
+          + cg-expr(t, datas) + cg-expr(e, datas) 
           + [eq-con(t-expr(expr), t-expr(t)),
              eq-con(t-expr(expr), t-expr(e)),
              eq-con(t-expr(t), t-expr(e))] # is this an infinite loop?
-    | h-cases(type, val, branches, _else) => # TODO
+    | h-cases(type, val, branches, _else) => 
+        when not T.is-t-named(type):
+          raise("cases only works with named types. ")
+        end
+        
+        opdat = datas.find(fun(nd :: AH.NamedData) -> Bool: 
+                             nd.name == type.name 
+                           end)
+
+        when is-none(opdat):
+          raise("Not a valid type for cases statement")
+        end
+
+        dat = opdat.value
+
+        cases (T.Type) val.ty:
+          | t-blank => [eq-con(t-id(val.id), t-ty(type))]
+          | else => 
+              when not (val.ty == type):
+                raise("Type mismatch in cases value")
+              end
+        end
+         + for fold(s from [], b from branches):
+             s + cases (AH.HCasesBranch) b:
+               | h-cases-branch(name, args, body) =>
+                  cases (AH.HVariant) dat.get-variant(name):
+                    | h-variant(_, members, _) => 
+                        for map2(a from args, m from members):
+                          cases (T.Type) a.ty:
+                            | t-blank => eq-con(t-id(a.id), t-ty(m.bind.ty))
+                            | else =>
+                                when not (a.ty == m.bind.ty):
+                                  raise("Type mismatch in cases binding")
+                                end
+                                eq-con(t-id(a.id), t-ty(a.ty))
+                          end
+                        end
+                    | h-singleton-variant(_, _) => 
+                        # Check for number of args
+                        when not is-empty(args):
+                          raise("singleton variant takes no args")
+                        end
+                        []
+                  end
+                   + cg-expr(body, datas) 
+                   + [eq-con(t-expr(body), t-expr(expr))]
+             end
+           end
+         + cases (Option<AH.HExpr>) _else:
+             | none => []
+             | some(s) => 
+                 cg-expr(s, datas) + [eq-con(t-expr(s), t-expr(expr))]
+           end 
   end
 end
 
@@ -114,7 +167,7 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
         end
          + cases (T.Type) closure.ty:
              | t-blank => [eq-con(t-id(closure.id), t-var(closure.id))]
-             | else => [eq-con(t-id(colsure.id), t-ty(closure.ty))]
+             | else => [eq-con(t-id(closure.id), t-ty(closure.ty))]
            end
     | h-app(f, args) => 
         cases (T.Type) f.ty:
@@ -152,7 +205,7 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
                    | t-blank => eq-con(t-id(f.value.id), t-var(f.value.id))
                    | else => eq-con(t-id(f.value.id), t-ty(f.value.ty))
                  end,
-                 eq-con(t-id(f.value.id), 
+                 eq-con(t-box(t-id(f.value.id)), 
                         t-lookup(t-id(super.id), f.name.name))] + s
               end
           # t-record isn't going to happen
@@ -160,17 +213,17 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
         end
          + [eq-con(t-lettable(lettable), t-var(super.id))]
     | h-extend(super, fields) => # TODO
-    | h-env(field) => # TODO
+    | h-env(field) => []
     | h-dot(obj, field) => 
         cases (T.Type) obj.ty:
           | t-blank => 
               [eq-con(t-lettable(lettable), 
                       t-lookup(t-var(obj.id), field.name))]
-          | t-record(fields) => 
-              cases (Option<Term>) get-field(fields, field):
-                | none => raise("Error: record has no field " + field)
-                | some(s) => [eq-con(t-lettable(lettable), s)]
-              end
+      #    | t-record(fields) => 
+      #        cases (Option<Term>) get-field(fields, field):
+       #         | none => raise("Error: record has no field " + field)
+       #         | some(s) => [eq-con(t-lettable(lettable), s)]
+       #       end
           # TODO handle dot notation with ADTs
           | else => raise("Error: cannot unify (message TODO)")
         end
@@ -202,10 +255,32 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
 end
 
 
-fun cg-func(func :: AH.NamedFunc) -> List<Constraint>:
+fun cg-func(func :: AH.NamedFunc, 
+            datas :: List<AH.NamedData>) -> List<Constraint>:
   cases (AH.NamedFunc) func: 
     | named-func(name, args, body, ret, is-closure) => 
-        cg-expr(body) + # TODO rest of stuff here...
+        cg-expr(body, datas) 
+         + [eq-con(t-expr(body), t-ty(ret)),
+            eq-con(t-id(name), t-arrow(for map(a from args):
+                                         cases (T.Type) a.ty:
+                                           | t-blank => t-var(a.id)
+                                           | else => t-ty(a.ty)
+                                         end
+                                       end,
+                                       t-ty(ret)))]
+         + for map(a from args):
+             cases (T.Type) a.ty:
+               | t-blank => eq-con(t-id(a.id), t-var(a.id))
+               | else => eq-con(t-id(a.id), t-ty(a.ty))
+             end
+           end
+  end
+end
+
+
+fun cg-datas(datas :: List<AH.NamedData>) -> List<Constraint>:
+  for fold(s from [], dat from datas):
+    # TODO 
   end
 end
 
@@ -255,7 +330,7 @@ fun extend-replace(l :: Term,
               | t-arrow(_, _) => raise("Function in dot expression")
               | t-record(fields2) => 
                   cases (Option<Term>) get-field(fields2, field):
-                    | none => raise("Field " + field " not found!")
+                    | none => raise("Field " + field + " not found!")
                     | some(s) => s
                   end
               | t-ty(type) => raise("t-ty in t-lookup case of replace()?")
@@ -388,63 +463,80 @@ end
 # replace all blank T.Types with their proper values.
 fun assign-expr(expr :: AH.HExpr, subs :: List<Substitution>) -> AH.HExpr:
   cases (AH.HExpr) expr:
-    | h-ret(id) => h-ret(id.retype-if-blank(type-id(id.id, subs)))
+    | h-ret(id) => AH.h-ret(id.retype-if-blank(type-id(id.id, subs)))
     | h-let(bind, val, body) => 
-        h-let(bind.retype-if-blank(type-lettable(val, subs)),
-              assign-lettable(val, subs),
-              assign-expr(body, subs))
-    | h-assign(bind, val, body) => 
-        h-assign(bind.retype-if-blank(type-id(bind.id, subs)),
-                 assign-lettable(val, subs), 
+        AH.h-let(bind.retype-if-blank(type-lettable(val, subs)),
+                 assign-lettable(val, subs),
                  assign-expr(body, subs))
+    | h-assign(bind, val, body) => 
+        AH.h-assign(bind.retype-if-blank(type-id(bind.id, subs)),
+                    assign-lettable(val, subs), 
+                    assign-expr(body, subs))
     | h-try(body, bind, _except) => 
-        h-try(assign-expr(body, subs), 
-              body.retype-if-blank(type-id(bind.id, subs)),
-              assign-expr(_except, subs))
+        AH.h-try(assign-expr(body, subs), 
+                 body.retype-if-blank(type-id(bind.id, subs)),
+                 assign-expr(_except, subs))
     | h-if(c, t, e) => 
-        h-if(c.retype-if-blank(type-id(c.id, subs)),
-             assign-expr(t, subs),
-             assign-expr(e, subs))
-    | h-cases(type, val, branches, _else) => # TODO
+        AH.h-if(c.retype-if-blank(type-id(c.id, subs)),
+                assign-expr(t, subs),
+                assign-expr(e, subs))
+    | h-cases(type, val, branches, _else) => 
+        AH.h-cases(type, 
+                   val.retype-if-blank(type-id(val.id, subs)),
+                   for map(b from branches):
+                     cases (AH.HCasesBranch) b:
+                       | h-cases-branch(name, args, body) =>
+                           new-args = for map(a from args):
+                             a.retype-if-blank(type-id(a.id, subs))
+                           end
+                           AH.h-cases-branch(name, 
+                                             new-args, 
+                                             assign-expr(body, subs))
+                     end
+                   end,
+                   cases (Option<AH.HExpr>) _else:
+                     | none => none
+                     | some(s) => some(assign-expr(s, subs))
+                   end)
   end
 end
 
 fun assign-lettable(lettable :: AH.HLettable,
                     subs :: List<Substitution>) -> AH.HLettable:
   cases (AH.HLettable) lettable: 
-    | h-undefined => h-undefined
-    | h-box(id) => h-box(id.retype-if-blank(type-id(id.id, subs)))
-    | h-id(id) => h-id(id.retype-if-blank(type-id(id.id, subs)))
-    | h-unbox(id) => h-unbox(id.retype-if-blank(type-id(id.id, subs)))
+    | h-undefined => AH.h-undefined
+    | h-box(id) => AH.h-box(id.retype-if-blank(type-id(id.id, subs)))
+    | h-id(id) => AH.h-id(id.retype-if-blank(type-id(id.id, subs)))
+    | h-unbox(id) => AH.h-unbox(id.retype-if-blank(type-id(id.id, subs)))
     | h-lam(f, closure) => 
-        h-lam(f.retype-if-blank(type-id(f.id, subs)), 
-              closure.retype-if-blank(type-id(closure.id, subs)))
+        AH.h-lam(f.retype-if-blank(type-id(f.id, subs)), 
+                 closure.retype-if-blank(type-id(closure.id, subs)))
     | h-app(f, args) => 
-        h-app(f.retype-if-blank(type-id(f.id, subs)),
-              for map(a from args): 
-                a.retype-if-blank(type-id(a.id, subs))
-              end)
-    | h-obj(fields) => h-obj(map(assign-field(_, subs), fields))
+        AH.h-app(f.retype-if-blank(type-id(f.id, subs)),
+                 for map(a from args): 
+                   a.retype-if-blank(type-id(a.id, subs))
+                 end)
+    | h-obj(fields) => AH.h-obj(map(assign-field(_, subs), fields))
     | h-update(super, fields) => 
-        h-update(super.retype-if-blank(type-id(super.id, subs)), 
-                 map(assign-field(_, subs), fields))
+        AH.h-update(super.retype-if-blank(type-id(super.id, subs)), 
+                    map(assign-field(_, subs), fields))
     | h-extend(super, fields) =>
-        h-update(super.retype-if-blank(type-id(super.id, subs)),
-                 map(assign-field(_, subs), fields))
-    | h-env(field) => h-env(field.retype-if-blank(type-id(field.id, subs)))
+        AH.h-update(super.retype-if-blank(type-id(super.id, subs)),
+                    map(assign-field(_, subs), fields))
+    | h-env(field) => AH.h-env(field)
     | h-dot(obj, field) => 
-        h-dot(obj.retype-if-blank(type-id(obj.id, subs)), field)
+        AH.h-dot(obj.retype-if-blank(type-id(obj.id, subs)), field)
     | h-colon(obj, field) => 
-        h-colon(obj.retype-if-blank(type-id(obj.id, subs)), field)
+        AH.h-colon(obj.retype-if-blank(type-id(obj.id, subs)), field)
     | h-get-bang(obj, field) => 
-        h-get-bang(obj.retype-if-blank(type-id(obj.id, subs)), field)
+        AH.h-get-bang(obj.retype-if-blank(type-id(obj.id, subs)), field)
   end
 end
 
 fun assign-field(field :: AH.HField, subs :: List<Substitution>) -> AH.HField:
   cases (AH.HField) field:
     | h-field(name, value) => 
-        h-field(name, value.retype-if-blank(type-id(value.id, subs)))
+        AH.h-field(name, value.retype-if-blank(type-id(value.id, subs)))
   end
 end
 
@@ -452,17 +544,13 @@ fun assign-func(func :: AH.NamedFunc,
                 subs :: List<Substitution>) -> AH.NamedFunc:
   cases (AH.NamdeFunc) func: 
     | named-func(name, args, body, ret, is-closure) => 
-        new-ret = cases (T.Type) ret:
-          | t-blank => # TODO infer
-          | else => # TODO Not entirely sure yet. Probably an error. 
-        end
-        named-func(name, 
-                   for map(a from args): 
-                     a.retype-if-blank(type-id(a.id, subs)) 
-                   end,
-                   assign-expr(body, subs),
-                   new-ret, # TODO get new return type? 
-                   is-closure)
+        AH.named-func(name, 
+                      for map(a from args): 
+                        a.retype-if-blank(type-id(a.id, subs)) 
+                      end,
+                      assign-expr(body, subs),
+                      type-expr(body),
+                      is-closure)
   end
 end
 
@@ -474,7 +562,9 @@ fun infer-prog(program):
   globals = program.globals
   expr = program.expr
 
-  cons = for fold(s from cg-expr(expr), f from funcs): s + cg-func(f) end
+  cons = for fold(s from cg-expr(expr, datas), f from funcs): 
+           s + cg-func(f, datas) 
+         end + cg-datas(datas)
 
   subs = unify-subs(cons, empty)
 

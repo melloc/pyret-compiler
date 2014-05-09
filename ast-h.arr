@@ -153,6 +153,10 @@ data NamedData:
                variants :: List<HVariant>, 
                shared :: List<HField>,
                closure :: Set<String>)
+sharing:
+  get-variant(self, name :: String) -> HVariant:
+    self.variants.find(fun(v :: HVariant) -> Bool: v.name == name end)
+  end
 end
 
 data NamedFunc:
