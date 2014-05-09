@@ -64,6 +64,7 @@ default-loc = A.loc("N/A", -1, -1)
 var datas = []
 var globals :: Set<AC.Global> = set([])
 var funcs = []
+var func-names = []
 
 
 
@@ -226,63 +227,73 @@ fun lookup-bind(id :: String, binds :: List<AC.Bind>) -> AC.Bind:
   end
 end
 
-fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<String>:
-  fun check-merge(v :: String, already :: Set<String>) -> Set<String>:
-    if already.member(v): set([]) else: set([v]) end
+fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<AC.Bind>:
+  fun check-merge(v :: AC.Bind, already :: Set<AC.Bind>) -> Set<AC.Bind>:
+    if already.member(v.id): set([]) else: set([v]) end
   end
 
-  fun gfv-expr(expr :: AH.HExpr, already :: Set<String>) -> Set<String>:
+  fun gfv-expr(expr :: AH.HExpr, already :: Set<String>) -> Set<AC.Bind>:
     cases (AH.HExpr) expr: 
-      | h-ret(bind) => check-merge(bind.id, already)
-      | h-let(bind, val, body) => 
-          nalready = already.union(set([bind.id]))
+      | h-ret(bind) => check-merge(bind, already)
+      | h-let(bind, val, body) =>
+          nalready = already.add(bind.id)
           gfv-lettable(val, already).union(gfv-expr(body, nalready))
       | h-assign(bind, val, body) => 
-        a = check-merge(bind.id, already)  
-        b = check-merge(val.id, already)  
+        a = check-merge(bind, already)  
+        b = check-merge(val, already)  
         gfv-expr(body, already).union(a).union(b)
       | h-try(body, bind, _except) => 
-          nalready = already.union(set([bind.id]))
+          nalready = already.add(bind.id)
           gfv-expr(body, already).union(gfv-expr(_except, nalready))
       | h-if(c, t, e) => 
-          s = check-merge(c.id, already).union(gfv-expr(t, already))
+          s = check-merge(c, already).union(gfv-expr(t, already))
           s.union(gfv-expr(e, already))
       | h-cases(_, val, branches, _else) =>
-        for fold(current from check-merge(val.id, already), branch from branches):
+        for fold(current from check-merge(val, already), branch from branches):
           current.union(cases(AH.HCasesBranch) branch:
             | h-cases-branch(name, args, body) =>
-              gfv-expr(body, already.union(set(for map(arg from args): arg.id end)))
+              gfv-expr(body, already.union(set(args)))
           end)
         end
     end
   end
 
   fun gfv-fields(fields :: List<AH.HField>, 
-                 already :: Set<String>) -> Set<String>:
+                 already :: Set<String>) -> Set<AC.Bind>:
     for fold(s from set([]), f from fields):
-      s.union(check-merge(f.value.id, already))
+      s.union(check-merge(f.value, already))
     end
   end
 
   fun gfv-lettable(lettable :: AH.HLettable, 
-                   already :: Set<String>) -> Set<String>:
+                   already :: Set<String>) -> Set<AC.Bind>:
     cases (AH.HLettable) lettable: 
-      | h-id(bind) => check-merge(bind.id, already)
-      | h-box(bind) => check-merge(bind.id, already)
-      | h-unbox(bind) => check-merge(bind.id, already)
-      | h-lam(f, closure) => check-merge(closure.id, already) # TODO do we need this? 
-      | h-app(func, args) => 
-          for fold(s from check-merge(func.id, already), arg from args):
-            s.union(check-merge(arg.id, already))
-          end
-      | h-obj(fields) => gfv-fields(fields, already)
-      | h-update(obj, fields) => 
-          check-merge(obj.id, already).union(gfv-fields(fields, already))
-      | h-extend(obj, fields) => 
-          check-merge(obj.id, already).union(gfv-fields(fields, already))
-      | h-dot(obj, field) => check-merge(obj.id, already)
-      | h-colon(obj, field) => check-merge(obj.id, already)
-      | h-get-bang(obj, field) => check-merge(obj.id, already)
+      | h-id(bind)             =>
+        check-merge(bind, already)
+      | h-box(bind)            =>
+        check-merge(bind, already)
+      | h-unbox(bind)          =>
+        check-merge(bind, already)
+      | h-lam(f, closure)      =>
+        for fold(curr from check-merge(f, already), capture from closure):
+          curr.union(check-merge(capture, already))
+        end
+      | h-app(func, args)      =>
+        for fold(curr from check-merge(func, already), arg from args):
+          curr.union(check-merge(arg, already))
+        end
+      | h-obj(fields)          =>
+        gfv-fields(fields, already)
+      | h-update(obj, fields)  => 
+        check-merge(obj, already).union(gfv-fields(fields, already))
+      | h-extend(obj, fields)  => 
+        check-merge(obj, already).union(gfv-fields(fields, already))
+      | h-dot(obj, field)      => 
+        check-merge(obj, already)
+      | h-colon(obj, field)    => 
+        check-merge(obj, already)
+      | h-get-bang(obj, field) =>
+        check-merge(obj, already)
       | else => set([])
     end
   end
@@ -452,17 +463,20 @@ fun let-lettable(bind :: AC.Bind,
                                         AC.c-field-name(field)), 
                           aexpr-h(b, vs, binds)))
     | a-lam(l, args, ret, body) =>
-        name = gensym("func." + bind.id + ".")
-        name-bind = AC.c-bind-loc(l, name, T.t-blank)
+        name = bind.id # gensym("func." + bind.id + ".")
+        func-names := link(name, func-names)
+        name-bind = AC.c-bind-loc(l, name, T.t-arrow(args.map(_.ty), ret))
         fbody = aexpr-h(body, vs, binds).rename(bind, name-bind)
 
+        continue = aexpr-h(b, vs, binds)
+
         # Determine if closure
-		fvars = get-free-vars(fbody,
+	    fvars = get-free-vars(fbody,
                               set(builtin-functions
-                                  + [ name-bind.id ]
+                                  + func-names
                                   + for map(a from args):
                                       a.id
-                                    end 
+                                    end
                                   + for map(global from globals.to-list()):
                                       global.name.id
                                     end)).to-list()
@@ -470,25 +484,14 @@ fun let-lettable(bind :: AC.Bind,
 
         # Lift procedure
         new-body = for fold(base from fbody, vid from fvars):
-          AH.h-let(AC.c-bind(vid, T.t-blank), AH.h-env(AC.c-field-name(vid)), base)
+          AH.h-let(vid, AH.h-env(AC.c-field-name(vid.id)), base)
         end
         func = AH.named-func(name, args, new-body, ret, is-closure)
         funcs := link(func, funcs)
         if is-closure:
-          tmp-name   = gensym("obj.closure.")
-		  tmp-obj    = AC.c-bind(tmp-name, T.t-record([]))
-          tmp-update = AC.c-bind(tmp-name + ".update", T.t-record([]))
-          closure-obj = AH.h-obj([])
-          closure-update = AH.h-update(tmp-obj, for map(vid from fvars):
-            field-name  = AC.c-field-name(vid)
-            field-value = AC.c-bind(vid, T.t-blank)
-            AH.h-field(field-name, field-value)
-          end)
-		  AH.h-let(tmp-obj, closure-obj,
-            AH.h-let(bind, AH.h-lam(name-bind, tmp-obj), 
-              AH.h-let(tmp-update, closure-update, aexpr-h(b, vs, binds))))
+          AH.h-let(bind, AH.h-lam(name-bind, fvars), continue)
         else:
-          AH.h-let(bind, AH.h-id(name-bind), aexpr-h(b, vs, binds))
+          continue
         end
     | a-method(l, args, ret, body) =>
         raise("methods not currently handled")
@@ -613,6 +616,7 @@ fun anf-to-h(prog :: N.AProg):
   funcs := []
   datas := []
   globals := set([])
+  func-names := []
   cases (N.AProg) prog: 
     | a-program(l, imports, body) => # TODO
         fbody = filter-lets(aexpr-h(body, set([]), empty))

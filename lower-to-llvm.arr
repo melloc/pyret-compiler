@@ -70,7 +70,9 @@ sharing:
   lookup-scope(self, needle :: AC.Bind) -> Scope:
     cases(Option<Identifier>) self.lookup-identifier(needle):
       | some(i) => i.scope
-      | none    => raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine scope.")
+      | none    => 
+        print(self.identifiers)
+        raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine scope.")
     end
   end,
   insert(self, bind :: AC.Bind, scope :: IdentifierScope):
@@ -112,6 +114,10 @@ fun get-symbols-expr(expr :: AL.Expression) -> Set<String>:
         current.union(branch-symbols)
       end
     | l-let(binding, exp, body) =>
+      exp-symbols  = get-symbols-lettable(exp)
+      body-symbols = get-symbols-expr(body)
+      exp-symbols.union(body-symbols)
+    | l-seq(exp, body) =>
       exp-symbols  = get-symbols-lettable(exp)
       body-symbols = get-symbols-expr(body)
       exp-symbols.union(body-symbols)
@@ -323,17 +329,22 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       table-space-id   = K.LocalVariable(table-space-name)
       from-id          = mk-llvm-variable(value, identifiers)
       from-ty          = ann-to-type(value.ty, some(value), identifiers)
-      bitcast-name     = gensym("bitcast-value.")
+      from-ty-ptr      = K.Pointer(from-ty, none)
+      malloc-name      = gensym("malloc.")
+      malloc-id        = K.LocalVariable(malloc-name)
+      bitcast-name     = malloc-name + gensym(".bitcast.")
       bitcast-id       = K.LocalVariable(bitcast-name)
       instrs = [
+        L.Assign(malloc-name, malloc(16)),
+        L.Assign(bitcast-name, L.BitCast(bytes, malloc-id, from-ty-ptr)),
+        L.NoAssign(L.Store(false, from-ty, from-id, from-ty-ptr, bitcast-id, none, none)),
         L.Assign(table-space-name, L.Alloca(bytes)),
-        L.NoAssign(L.Store(false, bytes, table-id, bytess, table-space-id, none, none)),
-        L.Assign(bitcast-name, L.BitCast(from-ty, from-id, bytes))
+        L.NoAssign(L.Store(false, bytes, table-id, bytess, table-space-id, none, none))
       ]
       call-op    = L.Call(false, L.CCC, bytes, K.GlobalVariable("table-insert"), [
         L.Argument(bytess, table-space-id, empty),
         L.Argument(K.Integer(64), K.ConstantInt(symbols.lookup(field-name.name)), empty),
-        L.Argument(bytes, bitcast-id, empty)
+        L.Argument(bytes, malloc-id, empty)
       ], empty)
       H.pair(instrs, call-op)
     | l-lookup(table, field-name) =>
@@ -535,6 +546,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         end
       end
 
+print(init)
       # Create main()
       init-identifiers = identifiers
         .insert(AC.c-bind("argc", T.t-word), LocalIdentifier)

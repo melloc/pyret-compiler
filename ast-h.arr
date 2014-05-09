@@ -15,7 +15,7 @@ data HLettable:
   | h-box(id :: AC.Bind)
   | h-id(id :: AC.Bind)
   | h-unbox(id :: AC.Bind)
-  | h-lam(f :: AC.Bind, closure :: AC.Bind)
+  | h-lam(f :: AC.Bind, closure :: List<AC.Bind>)
   | h-app(f :: AC.Bind, args :: List<AC.Bind>)
   | h-obj(fields :: List<HField>)
   | h-update(super :: AC.Bind, fields :: List<HField>)

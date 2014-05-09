@@ -18,7 +18,21 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
     | h-id(id)                => raise("There should be no h-id's left when converting to the lower AST!")
     | h-box(id)               => plug(AL.l-box(id))
     | h-unbox(id)             => plug(AL.l-unbox(id))
-    | h-lam(f, env)           => plug(AL.l-val(AL.l-closure(f, env)))
+    | h-lam(f, env)           => 
+      unloaded-name = AC.c-bind(gensym("unload-global.empty-table."), T.t-record([]))
+      empty-table = AL.l-copy(unloaded-name)
+
+      # Logic to capture environment
+      tmp-name   = gensym("closure.obj")
+	  tmp-obj    = AC.c-bind(tmp-name, T.t-record([]))
+      build = AL.l-let(tmp-obj, empty-table, env.foldr(fun(value :: AC.Bind, next :: AL.Expression):
+        field-name  = AC.c-field-name(value.id)
+        AL.l-seq(AL.l-update(tmp-obj, field-name, value), next)
+      end, plug(AL.l-val(AL.l-closure(f, tmp-obj)))))
+
+      # Clone table and embed capture logic
+      global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
+      AL.l-let(unloaded-name, AL.l-unbox(global-empty-table), build)
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
       unloaded-name = AC.c-bind(gensym("unload-global.empty-table."), T.t-record([]))

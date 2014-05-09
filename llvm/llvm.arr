@@ -261,8 +261,8 @@ data Instruction:
 sharing:
   tostring(self) -> String:
     cases(Instruction) self:
-      | Assign(name, op) => "%" + name + " = " + op.tostring()
-      | NoAssign(op)     => op.tostring()
+      | Assign(name, op) => "\t%" + name + " = " + op.tostring()
+      | NoAssign(op)     => "\t" + op.tostring()
       | Label(name)      => name + ":"
     end
   end
