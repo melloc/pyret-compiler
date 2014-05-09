@@ -139,7 +139,18 @@ end
 fun get-field(rec :: List<TermField>, name :: String) -> Option<Term>:
   cases (List<TermField>) rec: 
     | empty => none
-    | link(f, r) => if f.name == name: f.type else: get-field(r, name) end
+    | link(f, r) => 
+        if f.name == name: some(f.type) else: get-field(r, name) end
+  end
+end
+
+
+fun get-type-field(rec :: List<T.TypeField>, 
+                   name :: String) -> Option<T.Type>:
+  cases (List<T.TypeField>) rec:
+    | empty => none
+    | link(f, r) => 
+        if f.name == name: some(f.type) else: get-type-field(r, name) end
   end
 end
 
@@ -210,7 +221,26 @@ fun cg-lettable(lettable :: AH.HLettable) -> List<Constraint>:
                  eq-con(t-box(t-id(f.value.id)), 
                         t-lookup(t-id(super.id), f.name.name))] + s
               end
-          # t-record isn't going to happen
+          | t-record(fields2) => 
+              for fold(s from [eq-con(t-id(super.id), t-ty(super.ty))],
+                       f from fields):
+                # TODO get type of field; error if not there
+                ftype = cases (Option<T.Type>) get-type-field(fields2,
+                                                              f.value.name):
+                  | none => raise("Field " + f.value.name + " not present")
+                  | some(s) => s
+                end
+
+                cases (T.Type) f.value.ty:
+                   | t-blank => [eq-con(t-id(f.value.id), t-ty(ftype))]
+                   | else => 
+                       when not (f.value.ty == ftype):
+                         raise("Type mismatch: " + f.value.ty.tostring()
+                                + " vs " + ftype.tostring())
+                       end
+                       [eq-con(t-id(f.value.id), t.ty(f.value.ty))]
+                end + s
+              end
           | else => raise("Error: cannot unify (message TODO)")
         end
          + [eq-con(t-lettable(lettable), t-var(super.id))]
