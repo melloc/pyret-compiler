@@ -25,8 +25,8 @@ data Term:
 sharing:
   tostring(self):
     cases (Term) self:
-      | t-expr(val) => "expr"
-      | t-lettable(val) => "lettable"
+      | t-expr(val) => "expr(" + val._torepr() + ")"
+      | t-lettable(val) => "lettable(" + val._torepr() + ")"
       | t-id(val) => "id(" + val.tostring() + ")"
       | t-var(val) => "var(" + val.tostring() + ")"
       | t-ty(val) => "ty(" + val.tostring() + ")"
@@ -96,7 +96,11 @@ fun cg-expr(expr :: AH.HExpr,
               end
           | t-pointer(ty) => 
               cases (T.Type) val.ty:
-                | t-blank => [eq-con(t-id(val.id), t-ty(ty))]
+                | t-blank => 
+                    when ty == T.T-blank:
+                      print("1234")
+                    end
+                    [eq-con(t-id(val.id), t-ty(ty))]
                 | else => 
                     when not (ty == val.ty):
                       raise("Typecheck failed: " + ty.tostring()
@@ -293,13 +297,25 @@ fun cg-lettable(lettable :: AH.HLettable,
                 end
 
                 cases (T.Type) f.value.ty:
-                   | t-blank => [eq-con(t-id(f.value.id), t-ty(ftype))]
-                   | else => 
-                       when not (f.value.ty == ftype):
-                         raise("Type mismatch: " + f.value.ty.tostring()
-                                + " vs " + ftype.tostring())
+                   | t-blank => 
+                       cases (T.Type) ftype:
+                         | t-blank => 
+                             [eq-con(t-id(f.value.id), 
+                                     t-lookup(super.ty, f.name.name))]
+                         | else => [eq-con(t-id(f.value.id), t-ty(ftype))]
                        end
-                       [eq-con(t-id(f.value.id), t-ty(f.value.ty))]
+                   | else => 
+                       cases (T.Type) ftype:
+                         | t-blank => 
+                             [eq-con(t-id(f.value.id),
+                                     t-lookup(super.ty, f.name.name))]
+                         | else => 
+                             when not (f.value.ty == ftype):
+                               raise("Type mismatch: " + f.value.ty.tostring()
+                                       + " vs " + ftype.tostring())
+                             end
+                             [eq-con(t-id(f.value.id), t-ty(f.value.ty))]
+                       end
                 end + s
               end
           | else => raise("Error: cannot unify (message TODO)")
@@ -488,6 +504,45 @@ fun lookup(t :: Term, subs :: List<Substitution>) -> Option<Term>:
 end
 
 
+fun resolve-t-lookup(obj :: Term, 
+                     field :: String,
+                     subs :: List<Substitution>) -> Option<Term>:
+  cases (Option<Term>) lookup(obj, subs):
+    | none => none
+    | some(s) => 
+        cases (Term) s:
+          | t-record(fields) => 
+              cases (Option<Term>) get-field(fields, field):
+                | none => raise("Field not present: " + field)
+                | some(value) => some(value)
+              end
+          | t-arrow(_, _) => raise("Arrow not permitted in lookup!")
+          | t-box(_) => raise("Box not permitted in lookup!")
+          | t-lookup(obj2, field2) => 
+              cases (Option<Term>) resolve-t-lookup(obj2, field, subs):
+                | none => none
+                | some(value) => 
+                    cases (Term) value:
+                      | t-record(fields) => 
+                          cases (Option<Term>) get-field(fields, field):
+                            | none => raise("Field not present: " + field)
+                            | some(v) => some(v)
+                          end
+                      | else => raise("Problem!")
+                    end
+              end
+          | t-ty(val) => 
+              cases (T.Type) val:
+                | t-record(fields) => 
+                    resolve-t-lookup(type-to-term(val), field, subs)
+                | else => raise("Invalid type in lookup: " + s.tostring())
+              end
+          | else => resolve-t-lookup(s, field, subs)
+        end
+  end
+end
+
+
 # Unification Code
 fun unify-subs(cons :: List<Constraint>, 
                subs :: List<Substitution>) -> List<Substitution>:
@@ -502,7 +557,8 @@ fun unify-subs(cons :: List<Constraint>,
     l = cons.first.lhs
     r = cons.first.rhs
 
-#print("IN UNIFY: " + l.tostring() + ", " + r.tostring())
+#print("IN UNIFY: " + l.tostring() + ", " + r.tostring() + ", cons size = "
+ #       + cons.length().tostring())
 
     fun cant-unify():
       raise("Cannot unify " + l.tostring() + " with " + r.tostring())
@@ -541,6 +597,12 @@ fun unify-subs(cons :: List<Constraint>,
                       unify-subs(link(eq-con(val, t-ty(to)), cons.rest), subs)
                   | else => cant-unify()
                 end
+            | t-lookup(obj, field) => 
+                unify-subs(link(eq-con(r, l), cons.rest), subs)
+                # TODO TODO TODO 
+              #  vvar = t-var(gensym("vv.v"))
+              #  unify-subs([eq-con(vvar, l), eq-con(vvar, r)] + cons.rest,
+              #             subs)
             # TODO this might need to be a swap case if there is a variable
             # on the right hand side of the constraint. 
             | else => cant-unify()
@@ -575,7 +637,33 @@ fun unify-subs(cons :: List<Constraint>,
             | else => raise("Record and non-record")
           end
       # TODO is this correct? 
-      | t-lookup(obj, field) => raise("Fail? Got t-lookup in unification.")
+      | t-lookup(obj, field) => 
+   #       cases (Option<Term>) lookup(obj, subs):
+   #         | none => 
+   #         | some(s) => 
+   #       end
+          cases (Term) r:
+            | t-lookup(obj2, field2) => 
+            #    vvar = t-var(gensym("vv.v"))
+             #   new-cons = [eq-con(vvar, l)] + cons.rest + [eq-con(vvar, r)]
+                # For now, just get rid of pair. 
+                unify-subs(cons.rest, extend-replace(l, r, subs))
+            | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+            | t-id(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+            | t-lettable(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+            | t-expr(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+            | t-ty(val) => # TODO
+            | t-box(val) => 
+                cases (Option<Term>) lookup(l, subs):
+                  | some(thing) => 
+                      unify-subs(link(eq-con(thing, r), cons.rest), subs)
+                  | none => 
+                      unify-subs(cons.rest, extend-replace(l, r, subs))
+                end
+            | t-record(fields) => # TODO
+            | t-arrow(args, ret) =>  # TODO
+            # TODO check that last one. May be bad. 
+          end
       | else =>
           # This case handles t-expr, t-lettable, t-id, and t-var, all 
           # of which are basically "variables" at this point. 
@@ -597,7 +685,13 @@ fun type-term(t :: Term, subs :: List<Substitution>) -> T.Type:
     | none => T.t-any 
     | some(s) => 
         cases (Term) s:
-          | t-ty(val) => val
+          | t-ty(val) => 
+              cases (T.Type) val:
+                | t-blank => 
+                   # print("This term is blank: " + t.tostring())
+                    T.t-any
+                | else => val
+              end
           | t-box(val) => T.t-pointer(type-term(val, subs)) 
           | t-arrow(args, ret) => 
               T.t-arrow(map(type-term(_, subs), args), type-term(ret, subs))

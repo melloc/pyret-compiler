@@ -66,6 +66,13 @@ end
 
 data HCasesBranch:
   | h-cases-branch(name :: String, args :: List<AC.Bind>, body :: HExpr)
+sharing:
+  rename(self, _from :: AC.Bind, to :: AC.Bind) -> HCasesBranch:
+    cases (HCasesBranch) self:
+      | h-cases-branch(name, args, body) => 
+          h-cases-branch(name, args, body.rename(_from, to))
+    end
+  end
 end
 
 fun maybe-rename(old :: AC.Bind, _from :: AC.Bind, to :: AC.Bind) -> AC.Bind:
@@ -123,7 +130,7 @@ sharing:
         new-branches = for map(branch from branches): branch.rename(_from, to) end
         new-else = cases(Option<HExpr>) _else:
           | none => none
-          | some(e) => e.rename(_from, to)
+          | some(e) => some(e.rename(_from, to))
         end
         h-cases(type, new-val, new-branches, new-else)
     end
