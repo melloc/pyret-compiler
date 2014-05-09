@@ -4,6 +4,7 @@ provide *
 
 import "llvm/llvm.arr" as L
 import "llvm/kind.arr" as K
+import "llvm/icmp.arr" as I
 import ast as A
 import "types.arr" as T
 import "ast-common.arr" as AC
@@ -268,7 +269,8 @@ fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: I
   cases(AL.Value) v:
     | l-closure(f, env) =>
       # Generate all identifiers and types needed 
-      f-type = prepend-env-to-type(ann-to-type(f.ty, some(f), identifiers))
+      f-ty   = ann-to-type(f.ty, some(f), identifiers)
+      f-type = prepend-env-to-type(f-ty)
       f-id   = mk-llvm-variable(f, identifiers)
       tramp-ptr    = gensym("tramp-ptr.")
       tramp-ptr-id = K.LocalVariable(tramp-ptr)
@@ -291,7 +293,7 @@ fun l-value-to-llvm(v :: AL.Value, symbols :: FieldSymbolTable, identifiers :: I
           L.Argument(bytes, tramp-ptr-id, [])
         ], []))
       instrs = [malloc-instr, init-call, adjust-call]
-      H.pair(instrs, L.BitCast(bytes, adjusted-tramp-id, f-type))
+      H.pair(instrs, L.BitCast(bytes, adjusted-tramp-id, f-ty))
     | l-boxed           =>
   end
 end
@@ -428,19 +430,22 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
           instrs.append(link(L.NoAssign(op), l-expr-to-llvm(body, symbols, identifiers, adts)))
       end
     | l-if(cond, consq, altern) =>
-      if-suffix     = gensym("-if-label.")
-      consq-label   = "consq"  + if-suffix
-      altern-label  = "altern" + if-suffix
-      cond-split    = L.BrConditional(cond.id, consq-label, altern-label)
+      if-suffix      = gensym("-if-label.")
+      consq-label    = "consq"  + if-suffix
+      altern-label   = "altern" + if-suffix
+      variant-tag    = gensym("variant.boolean.")
+      variant-tag-id = K.LocalVariable(variant-tag)
+      tag-is-zero    = variant-tag + ".is-zero"
+      tag-is-zero-id = K.LocalVariable(tag-is-zero)
+
       consq-branch  = link(L.Label(consq-label), l-expr-to-llvm(consq, symbols, identifiers, adts))
       altern-branch = link(L.Label(altern-label), l-expr-to-llvm(altern, symbols, identifiers, adts))
       end-label     = "end" + if-suffix
-      link(cond-split, H.flatten(
-        [
-          exit-to(consq-branch, end-label), 
-          exit-to(altern-branch, end-label),
-          [L.Label(end-label)]
-        ]))
+      [ 
+        L.Assign(variant-tag, L.ExtractValue(struct-pyret-value, mk-llvm-variable(cond, identifiers), [1])),
+        L.Assign(tag-is-zero, L.ICmp(I.Eq, K.Integer(32), variant-tag-id, K.ConstantInt(0))),
+        L.NoAssign(L.BrConditional(tag-is-zero, consq-label, altern-label))
+      ] + H.flatten([consq-branch, altern-branch])
     | l-assign(id, val, body) =>
       raise("Assignment not yet supported")
     | l-exit(message) =>
