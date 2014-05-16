@@ -4,6 +4,7 @@ provide *
 import "ast-anf.arr" as N
 import "ast-common.arr" as AC
 import "helpers.arr" as H
+import "types.arr" as T
 
 fun rename-value(value :: N.AVal, _from :: AC.Bind, to :: AC.Bind) -> N.AVal:
   fun maybe-rename(id :: String) -> String:
@@ -20,6 +21,10 @@ fun rename-value(value :: N.AVal, _from :: AC.Bind, to :: AC.Bind) -> N.AVal:
     | else               =>
       value
   end
+end
+
+fun rename-string(str :: String, _from :: AC.Bind, to :: AC.Bind) -> String:
+  if str == _from.id: to.id else: str end
 end
 
 fun rename-fields(fields :: List<N.AField>, _from :: AC.Bind, to :: AC.Bind) -> List<N.AField>:
@@ -53,7 +58,7 @@ fun rename-lettable(lettable :: N.ALettable, _from :: AC.Bind, to :: AC.Bind) ->
       new-shared = maybe-rename-fields(shared)
       N.a-data-expr(l, name, variants, new-shared)
     | a-assign(l, id, value) =>
-      N.a-assign(l, maybe-rename(id), rename-value(value, _from, to))
+      N.a-assign(l, maybe-rename(AC.c-bind(id, T.t-blank)).id, rename-value(value, _from, to))
     | a-app(l, f, args) =>
       N.a-app(l, f^rename-value(_from, to), args.map(rename-value(_, _from, to)))
     | a-help-app(l, f, args) =>
@@ -71,15 +76,15 @@ fun rename-lettable(lettable :: N.ALettable, _from :: AC.Bind, to :: AC.Bind) ->
       N.a-extend(l, new-super, new-fields)
     | a-dot(l, obj, field) =>
       new-obj   = rename-value(obj, _from, to)
-      new-field = rename-value(field, _from, to)
+      new-field = rename-string(field, _from, to)
       N.a-dot(l, new-obj, new-field)
     | a-colon(l, obj, field) =>
       new-obj   = rename-value(obj, _from, to)
-      new-field = rename-value(field, _from, to)
+      new-field = rename-string(field, _from, to)
       N.a-colon(l, new-obj, new-field)
     | a-get-bang(l, obj, field) =>
       new-obj   = rename-value(obj, _from, to)
-      new-field = rename-value(field, _from, to)
+      new-field = rename-string(field, _from, to)
       N.a-get-bang(l, new-obj, new-field)
     | a-lam(l, args, ret, body) =>
       new-args = args.map(maybe-rename)
@@ -197,7 +202,7 @@ fun anf-rename-expr(expr :: N.AExpr) -> N.AExpr:
               new-body = curr.b^rename-expr(arg, new-arg)
               H.pair(link(new-arg, curr.a), new-body)
             end
-            N.a-cases-branch(l2, name, new-args.a, new-args.b)
+            N.a-cases-branch(l2, name, new-args.a.reverse(), new-args.b)
         end
       end
       new-else     = cases(Option<N.AExpr>) _else:

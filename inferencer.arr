@@ -227,7 +227,9 @@ fun cg-expr(expr :: AH.HExpr,
                   end
 
                   cases (AH.HVariant) opvar.value:
-                    | h-variant(_, members, _) => 
+                    | h-variant(_, members, _) =>
+                        #print("args: " + args._torepr())
+                        #print("members: " + members._torepr())
                         for map2(a from args, m from members):
                           cases (T.Type) a.ty:
                             | t-blank => 

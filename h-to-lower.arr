@@ -203,7 +203,8 @@ fun h-to-lower(prog) -> AL.Program:
                v.fields.foldr(fun(field, current):
                   AL.l-seq(AL.l-update(table-bind, field, field.tobind()), current)
                end, AL.l-let(final-bind, AL.l-tag(2, v.tag, table-bind), AL.l-ret(final-bind))))), false)
-         print(t)
+         #print(t)
+         t
        end
      end)
   
