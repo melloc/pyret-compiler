@@ -6,10 +6,11 @@ import ast as A
 import namespaces as N
 
 # Different steps of compiler
-import "anf.arr" as anf
-import "anf-to-h.arr" as h
-import "inferencer.arr" as i
-import "h-to-lower.arr" as lower
+import "anf.arr"           as anf
+import "anf-rename.arr"    as r
+import "anf-to-h.arr"      as h
+import "inferencer.arr"    as i
+import "h-to-lower.arr"    as lower
 import "lower-to-llvm.arr" as llvm
 
 import "helpers.arr" as H
@@ -18,14 +19,15 @@ fun compile(input-filename :: String, output-filename :: String):
     prog-txt = H.get-file-text(input-filename)
     parsed = A.parse(prog-txt, input-filename, { check : false, env : N.pyret-env })
     anf-rep   = anf.anf-program(parsed.pre-desugar)
-    h-rep     = h.anf-to-h(anf-rep)
+    anf-rnmd  = r.anf-rename-prog(anf-rep)
+    h-rep     = h.anf-to-h(anf-rnmd)
     h-rep-typ = i.infer-prog(h-rep)
     lower-rep = lower.h-to-lower(h-rep-typ)
     llvm-rep  = llvm.lower-to-llvm(lower-rep)
     prelude   = H.get-file-text("runtime/prelude.ll")
     table-lib = H.get-file-text("runtime/table.ll")
     num-lib   = H.get-file-text("runtime/num.ll")
-    print-lib   = H.get-file-text("runtime/print.ll")
+    print-lib = H.get-file-text("runtime/print.ll")
     prog-str  = llvm-rep.tostring()
     llvm-str  = prelude + table-lib + num-lib + print-lib + prog-str
     H.put-file-text(output-filename, llvm-str)

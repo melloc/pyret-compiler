@@ -165,7 +165,7 @@ data AVariantMember:
     ) with:
     label(self): "a-variant-member" end,
     tosource(self):
-      self.member_type.tosource() + self.bind.tosource()
+      self.member-type.tosource() + self.bind.tosource()
     end
 sharing:
   visit(self, visitor):
