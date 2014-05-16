@@ -230,12 +230,27 @@ fun cg-expr(expr :: AH.HExpr,
                     | h-variant(_, members, _) => 
                         for map2(a from args, m from members):
                           cases (T.Type) a.ty:
-                            | t-blank => sub-con(T.t-id(a.id), m.bind.ty)
-                            | else =>
-                                when not (a.ty == m.bind.ty):
-                                  raise("Type mismatch in cases binding")
+                            | t-blank => 
+                                cases (T.Type) m.bind.ty:
+                                  | t-blank => 
+                                      eq-con(T.t-id(a.id), T.t-id(m.bind.id))
+                                  | else => 
+                                      sub-con(T.t-id(a.id), m.bind.ty)
                                 end
-                                sub-con(T.t-id(a.id), a.ty)
+                            | else =>
+                                cases (T.Type) m.bind.ty:
+                                  | t-blank => 
+                                      eq-con(T.t-id(m.bind.id), a.ty)
+                                  | else => 
+                                      when not (a.ty == m.bind.ty):
+                                        raise("Type mismatch in cases bind: "
+                                                 + a.id + " :: "
+                                                 + a.ty.tostring() + " vs "
+                                                 + m.bind.id + " :: "
+                                                 + m.bind.ty.tostring())
+                                      end
+                                      sub-con(T.t-id(a.id), a.ty)
+                                end
                           end
                         end
                     | h-singleton-variant(_, _) => 
@@ -738,7 +753,7 @@ fun unify-subs(cons :: List<Constraint>,
             | t-lookup(_,_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | else => 
                 when l <> r:
-                  raise("Type mismatch (else case): " + l.tostring() + " vs "
+                  raise("Type mismatch (HERE): " + l.tostring() + " vs "
                            + r.tostring())
                 end
                 unify-subs(cons.rest, subs)
