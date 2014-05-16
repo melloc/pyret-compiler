@@ -21,7 +21,10 @@ builtin-functions = [
     "rational-times-method", 
     "rational-divide-method",
     "rational-equals-method",
-    "rational-lte-method"
+    "rational-lte-method",
+    "rational-lt-method",
+    "rational-gte-method",
+    "rational-gt-method"
 ]
     
 

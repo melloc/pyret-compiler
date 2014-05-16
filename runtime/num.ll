@@ -207,6 +207,41 @@ false-branch:
     ret %struct.pyret-value %false-value
 }
 
+define %struct.pyret-value @rational-gt-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp sgt i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
+}
+
+define %struct.pyret-value @rational-gte-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp sge i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
+}
+
+define %struct.pyret-value @rational-ne-method(%struct.pyret-value %a, %struct.pyret-value %b) {
+    %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
+    %is-equal = icmp ne i32 %cmp, 0
+    br i1 %is-equal, label %true-branch, label %false-branch
+true-branch:
+    %true-value = load %struct.pyret-value* @true
+    ret %struct.pyret-value %true-value
+false-branch:
+    %false-value = load %struct.pyret-value* @false
+    ret %struct.pyret-value %false-value
+}
 
 define %struct.pyret-value @rational-equals-method(%struct.pyret-value %a, %struct.pyret-value %b) {
     %cmp = call i32 @float-comparison-method(%struct.pyret-value %a, %struct.pyret-value %b)
@@ -246,4 +281,3 @@ define void @print-pyret-value(%struct.pyret-value %number) {
     exit:
     ret void
 }
-

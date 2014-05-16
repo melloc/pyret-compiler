@@ -123,6 +123,10 @@ fun convert-math-method(name :: String) -> String:
     "rational-lte-method" # TODO these aren't just for numbers
   else if name == "op<":
     "rational-lt-method" # TODO these aren't just for numbers
+  else if name == "op>":
+    "rational-gt-method" # TODO these aren't just for numbers
+  else if name == "op>=":
+    "rational-gte-method" # TODO these aren't just for numbers
   else:
     raise("Unsupported operation: " + name)
   end

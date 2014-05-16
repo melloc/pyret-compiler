@@ -494,6 +494,9 @@ library = [
   identifier(AC.c-bind("rational-divide-method", math-fun-type), GlobalIdentifier),
   identifier(AC.c-bind("rational-equals-method", math-fun-type), GlobalIdentifier),
   identifier(AC.c-bind("rational-lte-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-lt-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-gte-method", math-fun-type), GlobalIdentifier),
+  identifier(AC.c-bind("rational-gt-method", math-fun-type), GlobalIdentifier),
   identifier(AC.c-bind("global.empty-table", T.t-record([])), GlobalIdentifier),
   identifier(AC.c-bind("print", T.t-arrow([T.t-any], T.t-any)), GlobalIdentifier)
 ]
