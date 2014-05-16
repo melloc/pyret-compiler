@@ -5,5 +5,5 @@ c = 7
 y = x
 z = y
 
-print(z)
-print("Should print 9")
+print(z) # should print 9
+#print("Should print 9")

@@ -1,8 +1,8 @@
 #lang pyret
 
-o = {mutable x : "x"}
+o = {mutable x : 11}
 
-o!{x : "y"}
+o!{x : 13}
 
-print(o!x)
-print("Should print \"y\"")
+print(o!x) # Should print 13
+#print("Should print \"y\"")

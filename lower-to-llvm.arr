@@ -508,6 +508,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       symbols = for fold(current from set([]), procedure from procedures):
         cases(AL.Procedure) procedure:
           | l-proc(_, _, _, body, is-closure) => current.union(get-symbols-expr(body))
+          | l-constructor(_, _, _, _) => current # TODO TODO TODO TODO TODO TODO This is just a stopgap!
         end
       end.union(get-symbols-expr(init)).to-list()
       var count = 0
@@ -546,6 +547,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
               current.insert(arg, LocalIdentifier)
             end
             L.Procedure(name, ann-to-type(ret, none, identifiers), arguments, [], l-expr-to-llvm(body, symbol-table, func-identifiers, adts))
+          | l-constructor(name, args, ret, tag) => # TODO TODO TODO TODO TODO
         end
       end
 

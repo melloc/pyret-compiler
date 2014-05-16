@@ -102,7 +102,8 @@ data Program:
 end
 
 data Procedure:
-    l-proc(name :: String, args :: List<AC.Bind>, ret :: T.Type, body :: Expression, is-closure :: Boolean)
+  | l-proc(name :: String, args :: List<AC.Bind>, ret :: T.Type, body :: Expression, is-closure :: Boolean)
+  | l-constructor(name :: String, args :: List<AC.Bind>, ret :: T.Type, tag :: ConRep)
 end
 
 data Value:

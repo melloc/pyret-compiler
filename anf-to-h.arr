@@ -54,8 +54,8 @@ string-id-prefix = "str.p"
 bool-id-true = "bool.p-true"
 bool-id-false = "bool.p-false"
 
-closure-field    = AC.c-field-name("closure.f")
-funcptr-field    = AC.c-field-name("funcptr.f")
+#closure-field    = AC.c-field-name("closure.f")
+#funcptr-field    = AC.c-field-name("funcptr.f")
 
 
 default-loc = A.loc("N/A", -1, -1)
@@ -332,7 +332,7 @@ fun let-lettable(bind :: AC.Bind,
     cases (List<AField>) fields:
       | link(f, r) => 
           tmp-bind = AC.c-bind(next-val(), T.t-blank)
-          field-name = AC.c-field-name(f.name)
+          field-name = AC.c-field-name(f.name, T.t-blank)
           AH.h-let(tmp-bind,
                 aval-h(f.value, vs), 
                 obj-fold(r, link(AH.h-field(field-name, tmp-bind), done), finish))
@@ -374,7 +374,7 @@ fun let-lettable(bind :: AC.Bind,
             tmp-bind = AC.c-bind(tmp, T.t-blank)
             vtmps := [tmp] + vtmps
             vvals := [aval-h(wm.value, vs)] + vvals
-            AH.h-field(AC.c-field-name(wm.name), tmp-bind)
+            AH.h-field(AC.c-field-name(wm.name, T.t-blank), tmp-bind)
           end
 
           data-tmps := vtmps + data-tmps
@@ -391,10 +391,10 @@ fun let-lettable(bind :: AC.Bind,
         # Handle fields in "shared"
         conv-shared = for map(sf from shared): 
           tmp = next-val()
-          tmp-bind = AC.c-bind(tmp)
+          tmp-bind = AC.c-bind(tmp, T.t-blank)
           data-tmps := [tmp] + data-tmps 
           data-vals := [aval-h(sf.value, vs)] + data-vals
-          AH.h-field(AC.c-field-name(sf.name), tmp-bind)
+          AH.h-field(AC.c-field-name(sf.name, T.t-blank), tmp-bind)
         end
 
         datas := [AH.named-data(name, conv-variants, conv-shared, set([]))] + datas

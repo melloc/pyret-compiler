@@ -12,4 +12,4 @@ end
 
 print(test(0))
 print(test(1))
-print("Should output 10 and 6")
+#print("Should output 10 and 6")

@@ -26,7 +26,7 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       tmp-name   = gensym("closure.obj")
 	  tmp-obj    = AC.c-bind(tmp-name, T.t-record([]))
       build = AL.l-let(tmp-obj, empty-table, env.foldr(fun(value :: AC.Bind, next :: AL.Expression):
-        field-name  = AC.c-field-name(value.id)
+        field-name  = AC.c-field-name(value.id, value.ty)
         AL.l-seq(AL.l-update(tmp-obj, field-name, value), next)
       end, plug(AL.l-val(AL.l-closure(f, tmp-obj)))))
 
@@ -158,7 +158,7 @@ fun h-variant-member-to-lower(member :: AN.AVariantMember) -> AC.Field:
   # TODO: Some of this may need an overhaul
   cases(AN.AVariantMember) member:
     | a-variant-member(l, member-type, bind) =>
-      AC.c-field-name(bind.id)
+      AC.c-field-name(bind.id, bind.ty)
   end
 end
 
@@ -191,6 +191,16 @@ fun h-to-lower(prog) -> AL.Program:
   procs = for map(func from prog.funcs):
     h-proc-to-lower(func, adts)
   end
+   + H.flatten(for map(adt from adts):
+       for map(v from adt.variants):
+         AL.l-constructor(v.name, 
+                          for map(f from v.fields):
+                            AC.c-bind(f.name, f.type)
+                          end,
+                          T.t-name(adt.name), 
+                          v.tag)
+       end
+     end)
   
   AL.l-prog(prog.globals, procs, adts, h-expr-to-lower(prog.expr, adts, identity))
 end

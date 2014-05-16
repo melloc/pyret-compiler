@@ -43,7 +43,11 @@ sharing:
 end
 
 data Field:
-  | c-field-name(name :: String)
+  | c-field-name(name :: String, type :: T.Type)
+sharing:
+  tobind(self):
+    c-bind(self.name, self.type)
+  end
 end
 
 data Global:
