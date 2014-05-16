@@ -3,4 +3,5 @@
 *.a
 *.s
 *.arr.ll
-out.ll
+*out.ll
+fun.out.ll
