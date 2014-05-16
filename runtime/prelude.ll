@@ -18,6 +18,8 @@ declare void @llvm.init.trampoline(i8*, i8*, i8*)
 @true = internal constant %struct.pyret-value { i32 1, i32 0, i8* null }
 @false = internal constant %struct.pyret-value { i32 1, i32 1, i8* null }
 
+@exit.nocases = private constant [25 x i8] c"No usable case available\00"
+
 ;; Simple main function for now
 define i64 @main(i32  %argc, i8**  %argv) {
     call %struct.pyret-value @init(i32 %argc, i8** %argv)

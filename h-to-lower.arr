@@ -12,6 +12,8 @@ import "helpers.arr"     as H
 
 fun identity(a): a end
 
+global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
+
 fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression)) -> AL.Expression:
   cases(AH.HLettable) e:
     | h-undefined             => plug(AL.l-undefined)
@@ -31,7 +33,6 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
       end, plug(AL.l-val(AL.l-closure(f, tmp-obj)))))
 
       # Clone table and embed capture logic
-      global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
       AL.l-let(unloaded-name, AL.l-unbox(global-empty-table), build)
     | h-app(f, args)          => plug(AL.l-application(f, args))
     | h-obj(fields)           =>
@@ -54,7 +55,6 @@ fun h-lettable-to-lower(e :: AH.HLettable, plug :: (AL.Lettable -> AL.Expression
           end, plug(first-update))
           AL.l-let(new-copy, empty-table, updates)
       end
-      global-empty-table = AC.c-bind("global.empty-table", T.t-pointer(T.t-record([])))
       AL.l-let(unloaded-name, AL.l-unbox(global-empty-table), build-table)
     | h-update(table, fields) =>
       fun mk-update(field :: AH.HField) -> AL.Lettable:
@@ -140,7 +140,7 @@ fun h-expr-to-lower(e :: AH.HExpr, adts :: List<AL.ADT>, plug :: (AL.Expression 
         | some(else-hexpr) => 
           h-expr-to-lower(else-hexpr, adts, identity)
         | none    =>
-          AL.l-exit("No usable case available: " + type.tostring())
+          AL.l-exit(AL.NoCase)
       end
       plug(AL.l-switch(val, lower-branches, lower-else))
   end
@@ -193,12 +193,17 @@ fun h-to-lower(prog) -> AL.Program:
   end
    + H.flatten(for map(adt from adts):
        for map(v from adt.variants):
-         AL.l-constructor(v.name, 
-                          for map(f from v.fields):
-                            AC.c-bind(f.name, f.type)
-                          end,
-                          T.t-name(adt.name), 
-                          v.tag)
+         table-bind = AC.c-bind(gensym("new-table."), T.t-record([]))
+         unloaded-name = AC.c-bind(gensym("unload-global.empty-table."), T.t-record([]))
+         empty-table = AL.l-copy(unloaded-name)
+         final-bind  = AC.c-bind(gensym("final."), T.t-any)
+         t = AL.l-proc(v.name, v.fields.map(_.tobind()), T.t-name(adt.name),
+           AL.l-let(unloaded-name, AL.l-unbox(global-empty-table),
+             AL.l-let(table-bind, empty-table,
+               v.fields.foldr(fun(field, current):
+                  AL.l-seq(AL.l-update(table-bind, field, field.tobind()), current)
+               end, AL.l-let(final-bind, AL.l-tag(2, v.tag, table-bind), AL.l-ret(final-bind))))), false)
+         print(t)
        end
      end)
   

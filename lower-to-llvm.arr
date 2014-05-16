@@ -64,13 +64,16 @@ sharing:
   lookup-type(self, needle :: AC.Bind) -> T.Type:
     cases(Option<Identifier>) self.lookup-identifier(needle):
       | some(i) => i.id.ty
-      | none    => raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine type.")
+      | none    => 
+        print(self.identifiers)
+      raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine type.")
     end
   end,
   lookup-scope(self, needle :: AC.Bind) -> Scope:
     cases(Option<Identifier>) self.lookup-identifier(needle):
       | some(i) => i.scope
       | none    => 
+        print(self.identifiers)
         raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine scope.")
     end
   end,
@@ -98,6 +101,7 @@ fun get-symbols-lettable(expr :: AL.Lettable) -> Set<String>:
     | l-copy(table)                      => empty-set
     | l-box(id)                          => empty-set
     | l-unbox(id)                        => empty-set
+    | l-tag(_, _, _)                     => empty-set
     | l-application(f, args)             => empty-set
     | l-select(field, id, rep)           => empty-set
     | l-val(val)                         => empty-set
@@ -151,7 +155,8 @@ fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: Iden
           print("Discovered an untyped identifier! This suggests a bug in the type inferencer. Attempting lookup of `" + b.id + "'...")
           selected-type := identifiers.lookup-type(b)
         | none    =>
-          raise("Discovered an untyped identifier! This suggests a bug in the type inferencer.")
+          print("Discovered an untyped identifier! This suggests a bug in the type inferencer. Assuming object.")
+          selected-type := T.t-blank
       end
       print(" Attempting lookup.")
     end
@@ -375,6 +380,16 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       bind-type = ann-to-type(bind.ty, some(bind), identifiers)
       load-op = L.Load(bind-type, bind-id)
       H.pair(empty, load-op)
+    | l-tag(type-tag, variant-tag, table) =>
+      base = gensym("insertvalue.")
+      a      = base + ".1"
+      a-bind = K.LocalVariable(a)
+      b      = base + ".2"
+      b-bind = K.LocalVariable(a)
+      H.pair([
+        L.Assign(a, L.InsertValue(struct-pyret-value, K.UndefValue, K.Integer(32), K.ConstantInt(type-tag), [0])),
+        L.Assign(b, L.InsertValue(struct-pyret-value, a-bind, K.Integer(32), K.ConstantInt(variant-tag.toint()), [1]))
+      ], L.InsertValue(struct-pyret-value, b-bind, bytes, mk-llvm-variable(table, identifiers), [2]))
     | l-application(f, args) =>
       ret-type = cases(K.TypeKind) ann-to-type(f.ty, some(f), identifiers):
         | FunctionType(ret, _, _) =>
@@ -464,8 +479,8 @@ fun l-expr-to-llvm(e :: AL.Expression, symbols :: FieldSymbolTable, identifiers 
       stderr-id   = K.LocalVariable(stderr-name)
       io-ty       = K.Pointer(K.TypeIdentifier("struct._IO_FILE"), none)
       fprintf-ty  = K.FunctionType(K.Integer(32), [io-ty, bytes], true)
-      str-ty      = K.Arr(message.length() + 1, byte)
-      str-val     = K.ConstantString(message)
+      str-ty      = K.Arr(25, byte)
+      str-val     = K.GlobalVariable("exit.nocases")
       access      = K.access(K.Integer(32), K.ConstantInt(0))
       str-arg     = K.ConstantExpr(K.GetElementPtr(true, str-ty, str-val, [access, access]))
       [
@@ -508,7 +523,6 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       symbols = for fold(current from set([]), procedure from procedures):
         cases(AL.Procedure) procedure:
           | l-proc(_, _, _, body, is-closure) => current.union(get-symbols-expr(body))
-          | l-constructor(_, _, _, _) => current # TODO TODO TODO TODO TODO TODO This is just a stopgap!
         end
       end.union(get-symbols-expr(init)).to-list()
       var count = 0
@@ -539,15 +553,14 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
       llvm-procedures = for map(proc from procedures):
         cases(AL.Procedure) proc:
           | l-proc(name, args, ret, body, is-closure) =>
-            new-args = for map(arg from args): 
-              L.Parameter(arg.id, ann-to-type(arg.ty, some(arg), identifiers), [])
-            end
-            arguments = if is-closure: link(closure-parameter, new-args) else: new-args;
             func-identifiers = for fold(current from identifiers, arg from args):
               current.insert(arg, LocalIdentifier)
             end
-            L.Procedure(name, ann-to-type(ret, none, identifiers), arguments, [], l-expr-to-llvm(body, symbol-table, func-identifiers, adts))
-          | l-constructor(name, args, ret, tag) => # TODO TODO TODO TODO TODO
+            new-args = for map(arg from args): 
+              L.Parameter(arg.id, ann-to-type(arg.ty, some(arg), func-identifiers), [])
+            end
+            arguments = if is-closure: link(closure-parameter, new-args) else: new-args;
+            L.Procedure(name, ann-to-type(ret, none, func-identifiers), arguments, [], l-expr-to-llvm(body, symbol-table, func-identifiers, adts))
         end
       end
 
@@ -564,7 +577,7 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
 
       # Instantiate module
       prog-globals = llvm-globals-init.globals + llvm-globals
-      prog-procs   = link(init-proc, llvm-procedures)
+      prog-procs   = llvm-procedures + [init-proc]
       L.Module(prog-globals, prog-procs)
   end
 end

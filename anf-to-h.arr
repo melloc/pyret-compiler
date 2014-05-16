@@ -54,10 +54,6 @@ string-id-prefix = "str.p"
 bool-id-true = "bool.p-true"
 bool-id-false = "bool.p-false"
 
-#closure-field    = AC.c-field-name("closure.f")
-#funcptr-field    = AC.c-field-name("funcptr.f")
-
-
 default-loc = A.loc("N/A", -1, -1)
 
 ###################
@@ -459,7 +455,7 @@ fun let-lettable(bind :: AC.Bind,
                  aval-h(obj, vs), 
                  AH.h-let(bind, 
                           AH.h-dot(AC.c-bind(tmp, T.t-blank), 
-                                   AC.c-field-name(field)), 
+                                   AC.c-field-name(field, T.t-blank)),
                           aexpr-h(b, vs, binds)))
     | a-colon(l, obj, field) =>
         tmp = next-val()
@@ -467,7 +463,7 @@ fun let-lettable(bind :: AC.Bind,
                  aval-h(obj, vs),
                  AH.h-let(bind, 
                           AH.h-colon(AC.c-bind(tmp, T.t-blank), 
-                                     AC.c-field-name(field)), 
+                                     AC.c-field-name(field, T.t-blank)),
                           aexpr-h(b, vs, binds)))
     | a-get-bang(l, obj, field) => 
         tmp = next-val()
@@ -475,7 +471,7 @@ fun let-lettable(bind :: AC.Bind,
                  aval-h(obj, vs),
                  AH.h-let(bind, 
                           AH.h-get-bang(AC.c-bind(tmp, T.t-blank), 
-                                        AC.c-field-name(field)), 
+                                        AC.c-field-name(field, T.t-blank)),
                           aexpr-h(b, vs, binds)))
     | a-lam(l, args, ret, body) =>
         name = bind.id # gensym("func." + bind.id + ".")
@@ -502,7 +498,7 @@ fun let-lettable(bind :: AC.Bind,
 
         # Lift procedure
         new-body = for fold(base from fbody, vid from fvars):
-          AH.h-let(vid, AH.h-env(AC.c-field-name(vid.id)), base)
+          AH.h-let(vid, AH.h-env(AC.c-field-name(vid.id, vid.ty)), base)
         end
         func = AH.named-func(name, args, new-body, ret, is-closure)
         funcs := link(func, funcs)

@@ -101,7 +101,8 @@ fun ann-to-type(a :: A.Ann) -> Type:
     | a_record(l, fields) =>
       t-record(fields.map(afield-to-tfield))
     | a_app(l, ann, args) =>
-      raise("a_app not supported")
+      # TODO: Implement parameterized types
+      ann-to-type(ann)
     | a_pred(l, ann, exp) =>
       raise("a_pred not supported")
     | a_dot(l, obj, field) =>

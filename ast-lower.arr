@@ -22,6 +22,10 @@ data Variant:
   | l-variant(name :: String, tag :: ConRep, fields :: List<AC.Field>)
 end
 
+data ExitReason:
+  | NoCase
+end
+
 data ADT:
   | l-adt(name :: String, variants :: List<Variant>)
 sharing:
@@ -103,7 +107,6 @@ end
 
 data Procedure:
   | l-proc(name :: String, args :: List<AC.Bind>, ret :: T.Type, body :: Expression, is-closure :: Boolean)
-  | l-constructor(name :: String, args :: List<AC.Bind>, ret :: T.Type, tag :: ConRep)
 end
 
 data Value:
@@ -119,6 +122,7 @@ data Lettable:
   | l-lookup(table :: AC.Bind, field-name :: AC.Field)
   | l-env(field-name :: AC.Field)
   | l-copy(table :: AC.Bind)
+  | l-tag(type-tag :: Number, variant-tag :: ConRep, table :: AC.Bind)
   | l-box(id :: AC.Bind)
   | l-unbox(id :: AC.Bind)
   | l-val(val :: Value)
@@ -134,7 +138,7 @@ data Expression:
   | l-seq(e :: Lettable, body :: Expression)
   | l-assign(binding :: AC.Bind, val :: AC.Bind, body :: Expression)
   | l-if(cond :: AC.Bind, consq :: Expression, altern :: Expression)
-  | l-exit(message :: String)
+  | l-exit(message :: ExitReason)
   | l-ret(id :: AC.Bind)
 end
 
