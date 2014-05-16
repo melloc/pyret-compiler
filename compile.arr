@@ -8,7 +8,7 @@ import namespaces as N
 # Different steps of compiler
 import "anf.arr" as anf
 import "anf-to-h.arr" as h
-# import "inferencer.arr" as i
+import "inferencer.arr" as i
 import "h-to-lower.arr" as lower
 import "lower-to-llvm.arr" as llvm
 
@@ -19,8 +19,8 @@ fun compile(input-filename :: String, output-filename :: String):
     parsed = A.parse(prog-txt, input-filename, { check : false, env : N.pyret-env })
     anf-rep   = anf.anf-program(parsed.pre-desugar)
     h-rep     = h.anf-to-h(anf-rep)
-    # h-rep-typ = i.infer-prog(h-rep)
-    lower-rep = lower.h-to-lower(h-rep)
+    h-rep-typ = i.infer-prog(h-rep)
+    lower-rep = lower.h-to-lower(h-rep-typ)
     llvm-rep  = llvm.lower-to-llvm(lower-rep)
     prelude   = H.get-file-text("runtime/prelude.ll")
     table-lib = H.get-file-text("runtime/table.ll")

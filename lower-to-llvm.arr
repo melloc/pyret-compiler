@@ -71,7 +71,6 @@ sharing:
     cases(Option<Identifier>) self.lookup-identifier(needle):
       | some(i) => i.scope
       | none    => 
-        print(self.identifiers)
         raise("Couldn't find identifier `" + needle.id + "` in identifier table! Impossible to determine scope.")
     end
   end,
@@ -550,7 +549,6 @@ fun lower-to-llvm(prog :: AL.Program) -> L.ModuleBlock:
         end
       end
 
-print(init)
       # Create main()
       init-identifiers = identifiers
         .insert(AC.c-bind("argc", T.t-word), LocalIdentifier)

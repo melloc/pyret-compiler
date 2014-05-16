@@ -14,4 +14,5 @@ do-cases :: (NumberList -> Number) = fun(lst :: NumberList) -> Number:
   end
 end
 
-7
+#print(do-cases(string-list-link(7, string-list-empty)))
+print(7)

@@ -11,6 +11,12 @@ import "ast-h.arr" as AH
 data Constraint:
   #| sub-con(lhs :: T.Type, rhs :: T.Type)
   | eq-con(lhs :: T.Type, rhs :: T.Type)
+sharing:
+  tostring(self):
+    cases (Constraint) self:
+      | eq-con(lhs, rhs) => lhs.tostring() + " = " + rhs.tostring()
+    end
+  end
 end
 
 fun sub-con(l :: T.Type, r :: T.Type) -> Constraint:
@@ -56,6 +62,10 @@ debug = false
 
 data Substitution:
   | let-sub(lhs :: T.Type, rhs :: T.Type)
+sharing:
+  tostring(self):
+    self.lhs.tostring() + " = " + self.rhs.tostring()
+  end
 end
 
 
@@ -124,7 +134,7 @@ fun cg-expr(expr :: AH.HExpr,
             datas :: List<AH.NamedData>,
             funcs :: List<AH.NamedFunc>) -> List<Constraint>:
   cases (AH.HExpr) expr:
-    | h-ret(id) => cg-bind(id)
+    | h-ret(id) => cg-bind(id) + [eq-con(T.t-expr(expr), T.t-id(id.id))]
      #   cases (T.Type) id.ty:
      #     | t-blank => [eq-con(t-id(id.id), t-var(id.id))]
      #     | else => [eq-con(T.t-id(id.id), id.ty),
@@ -274,7 +284,7 @@ fun cg-lettable(lettable :: AH.HLettable,
           | else => [eq-con(T.t-pointer(T.t-id(id.id)), id.ty),
                      sub-con(T.t-pointer(T.t-var(id.id)), id.ty)]
         end
-    | h-lam(f, closure) => cg-bind(f) + cg-bind(closure)
+    | h-lam(f, closure) => cg-bind(f) + H.flatten(closure.map(cg-bind))
     | h-app(f, args) => 
         cg-bind(f) + H.flatten(args.map(cg-bind))
           + [sub-con(T.t-id(f.id), 
@@ -652,7 +662,7 @@ fun unify-subs(cons :: List<Constraint>,
                       eq-con(a, a2)
                     end + cons.rest
                 unify-subs(new-cons, subs)
-            | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+    #        | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-id(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-lettable(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-expr(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
@@ -677,7 +687,7 @@ fun unify-subs(cons :: List<Constraint>,
              #   new-cons = [sub-con(vvar, l)] + cons.rest + [sub-con(vvar, r)]
                 # For now, just get rid of pair. 
                 unify-subs(cons.rest, extend-replace(l, r, subs))
-            | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+    #        | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-id(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-lettable(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-expr(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
@@ -691,13 +701,13 @@ fun unify-subs(cons :: List<Constraint>,
             | else => cant-unify()
             # TODO check that last one. May be bad. 
           end
-      | t-var(_) => 
-          cases (Option<T.Type>) lookup(l, subs):
-            | some(thing) => 
-                unify-subs(link(eq-con(thing, r), cons.rest), subs)
-            | none => 
-                unify-subs(cons.rest, extend-replace(l, r, subs))
-          end
+ #     | t-var(_) => 
+ #         cases (Option<T.Type>) lookup(l, subs):
+ #           | some(thing) => 
+ #               unify-subs(link(eq-con(thing, r), cons.rest), subs)
+ #           | none => 
+ #               unify-subs(cons.rest, extend-replace(l, r, subs))
+ #         end
       | t-id(_) => 
           cases (Option<T.Type>) lookup(l, subs):
             | some(thing) => 
@@ -721,7 +731,7 @@ fun unify-subs(cons :: List<Constraint>,
           end
       | else =>
           cases (T.Type) r:
-            | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
+     #       | t-var(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-id(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-lettable(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
             | t-expr(_) => unify-subs(link(eq-con(r, l), cons.rest), subs)
@@ -894,8 +904,10 @@ fun assign-lettable(lettable :: AH.HLettable,
     | h-id(id) => AH.h-id(id.retype-if-blank(type-id(id.id, subs)))
     | h-unbox(id) => AH.h-unbox(id.retype-if-blank(type-id(id.id, subs)))
     | h-lam(f, closure) => 
-        AH.h-lam(f.retype-if-blank(type-id(f.id, subs)), 
-                 closure.retype-if-blank(type-id(closure.id, subs)))
+        AH.h-lam(f.retype-if-blank(type-id(f.id, subs)),
+                 for map(c from closure):
+                   c.retype-if-blank(type-id(c.id, subs))
+                 end)
     | h-app(f, args) => 
         AH.h-app(f.retype-if-blank(type-id(f.id, subs)),
                  for map(a from args): 
@@ -950,6 +962,8 @@ fun infer-prog(program):
   cons = cg-expr(expr, datas, funcs) + cg-funcs(datas, funcs) + cg-datas(datas)
 
   subs = unify-subs(get-eq-cons(cons), empty)
+
+ # print(subs.join-str("\n"))
 
   new-expr = assign-expr(expr, subs)
   new-funcs = map(assign-func(_, subs), funcs)

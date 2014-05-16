@@ -5,6 +5,10 @@ provide *
 import ast as A
 #import "ast-h.arr" as AH
 
+fun t-var(name :: String) -> Type:
+  t-id(name)
+end
+
 data Type:
   | t-blank
   | t-any
@@ -20,7 +24,7 @@ data Type:
   | t-param-name(name :: String, param :: Type)
 
   # My variants, for inference only
-  | t-var(name :: String) 
+ # | t-var(name :: String) 
   | t-lookup(obj :: Type, field :: String)
   | t-expr(expr)
   | t-lettable(lettable) # Leaving these blank for now to prevent cycle

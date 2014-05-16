@@ -256,7 +256,7 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<AC.Bind>:
         for fold(current from check-merge(val, already), branch from branches):
           current.union(cases(AH.HCasesBranch) branch:
             | h-cases-branch(name, args, body) =>
-              gfv-expr(body, already.union(set(args)))
+              gfv-expr(body, already.union(set(args.map(_.id))))
           end)
         end
     end
