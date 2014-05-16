@@ -184,6 +184,7 @@ fun ann-to-type(type :: T.Type, fallback :: Option<AC.Bind>, identifiers :: Iden
         struct-pyret-value
       | t-pointer(ty) =>
         K.Pointer(ann-to-type(ty, none, identifiers), none)
+      | else => raise("Not sure what to do with this type: " + selected-type.tostring())
     end
 end
 

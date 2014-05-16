@@ -3,6 +3,7 @@
 provide *
 
 import ast as A
+#import "ast-h.arr" as AH
 
 data Type:
   | t-blank
@@ -17,6 +18,13 @@ data Type:
   | t-number
   | t-pointer(ty :: Type)
   | t-param-name(name :: String, param :: Type)
+
+  # My variants, for inference only
+  | t-var(name :: String) 
+  | t-lookup(obj :: Type, field :: String)
+  | t-expr(expr)
+  | t-lettable(lettable) # Leaving these blank for now to prevent cycle
+  | t-id(id :: String)
 sharing:
   tostring(self):
     cases(Type) self:
@@ -30,7 +38,7 @@ sharing:
         args.join-str(", ") + " -> " + ret.tostring()
       | t-method(args, ret) =>
         "((" + args.join-str(", ") + ") -> " + ret.tostring() + ")"
-      | t-record(fields) =>
+      | t-record(fields) => "{" + fields.join-str(", ") + "}"
       | t-void =>
         "Void"
       | t-byte =>
@@ -41,7 +49,14 @@ sharing:
         "Number"
       | t-pointer(ty) =>
         ty.tostring() + "*"
-      | t-param-name(name, param) =>
+      | t-param-name(name, param) => 
+
+      # My variants
+      | t-var(name) => "'" + name
+      | t-lookup(obj, field) => obj.tostring() + "." + field
+      | t-expr(expr) => "<expr: " + expr._torepr() + ">"
+      | t-lettable(lettable) => "<lettable: " + lettable._torepr() + ">"
+      | t-id(id) => "<id: " + id + ">"
     end
   end,
   is-composite(self):
@@ -57,6 +72,10 @@ end
 
 data TypeField:
   | t-field(name :: String, type :: Type)
+sharing: 
+  tostring(self):
+    self.name + " : " + self.type.tostring()
+  end
 end
 
 fun ann-to-type(a :: A.Ann) -> Type:

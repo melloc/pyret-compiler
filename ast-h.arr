@@ -40,14 +40,14 @@ sharing:
       | h-app(f, args) =>
         h-app(rename-input(f), args.map(rename-input))
       | h-obj(fields :: List<HField>) =>
-        h-obj(maybe-rename-hfields(fields, _from, to))
+        h-obj(maybe-rename-hfields(fields, rename-input))
       | h-update(obj, fields) =>
         new-obj    = maybe-rename(obj, _from, to)
-        new-fields = maybe-rename-hfields(obj, _from, to)
+        new-fields = maybe-rename-hfields(fields, rename-input)
         h-update(new-obj, new-fields)
       | h-extend(obj, fields) =>
         new-obj    = maybe-rename(obj, _from, to)
-        new-fields = maybe-rename-hfields(obj, _from, to)
+        new-fields = maybe-rename-hfields(fields, rename-input)
         h-extend(new-obj, new-fields)
       | h-env(field) =>
         self
@@ -83,7 +83,8 @@ fun maybe-rename(old :: AC.Bind, _from :: AC.Bind, to :: AC.Bind) -> AC.Bind:
   end
 end
 
-fun maybe-rename-hfields(fields :: List<HField>, rename-input :: (AC.Bind, AC.Bind, AC.Bind -> AC.Bind)) -> List<HField>:
+fun maybe-rename-hfields(fields :: List<HField>, 
+                         rename-input :: (AC.Bind -> AC.Bind)) -> List<HField>:
   for map(field from fields):
     cases(HField) field:
       | h-field(name, value) =>

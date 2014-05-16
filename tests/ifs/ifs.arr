@@ -1,9 +1,9 @@
 #lang pyret
 
 if 1 == 1:
-  print("good")
+  print(1)
 else:
-  print("bad")
+  print(0)
 end
 
-print("Should have printed \"good\"")
+#print("Should have printed \"good\"")

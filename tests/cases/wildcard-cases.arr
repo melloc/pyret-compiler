@@ -2,17 +2,17 @@
 
 data TwoCases:
   | noFields
-  | oneField(x :: String)
+  | oneField(x :: Number)
 end
 
-fun handle-two-cases(tc :: TwoCases) -> String:
+fun handle-two-cases(tc :: TwoCases) -> Number:
   cases (TwoCases) tc:
-    | noFields => "NF"
-    | oneField(_) => "OF"
+    | noFields => 0
+    | oneField(_) => 1
   end
 end
 
 print(handle-two-cases(noFields))
-print(handle-two-cases(oneField("asdf")))
+print(handle-two-cases(oneField(8)))
 
-print("Should print \"NF\" followed by \"OF\" on a new line")
+#print("Should print \"NF\" followed by \"OF\" on a new line")

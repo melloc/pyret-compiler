@@ -1,7 +1,7 @@
 #lang pyret
 
-fun f(func :: (String -> String)) -> String:
-  func("asdf")
+fun f(func :: (Number -> Number)) -> Number:
+  func(5)
 end
 
-print(f(fun(str :: String) -> String: str + "more" end)) # should print "asdfmore"
+print(f(fun(str :: Number) -> Number: str + 8 end)) # should print "asdfmore"

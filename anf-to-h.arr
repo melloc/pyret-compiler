@@ -68,6 +68,7 @@ var datas = []
 var globals :: Set<AC.Global> = set([])
 var funcs = []
 var func-names = []
+var func-fv-sets :: List<Pair<String, Set<String>>> = []
 
 
 
@@ -261,6 +262,17 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<AC.Bind>:
     end
   end
 
+  fun gfv-lam(name :: String) -> Set<String>:
+    lam = fun (clos :: H.Pair<String, Set<String>>) -> Boolean:
+            clos.a == name
+          end
+    cases (Option<Pair<String, Set<String>>>) func-fv-sets.find(lam):
+      | none => raise("gfv-lam: if this error occurs, it means that we are "
+                        + "not lifting lambdas in the correct order.")
+      | some(s) => set(s.b)
+    end
+  end
+
   fun gfv-fields(fields :: List<AH.HField>, 
                  already :: Set<String>) -> Set<AC.Bind>:
     for fold(s from set([]), f from fields):
@@ -270,7 +282,7 @@ fun get-free-vars(ex :: AH.HExpr, alrdy :: Set<String>) -> Set<AC.Bind>:
 
   fun gfv-lettable(lettable :: AH.HLettable, 
                    already :: Set<String>) -> Set<AC.Bind>:
-    cases (AH.HLettable) lettable: 
+    cases (AH.HLettable) lettable:
       | h-id(bind)             =>
         check-merge(bind, already)
       | h-box(bind)            =>
@@ -485,6 +497,9 @@ fun let-lettable(bind :: AC.Bind,
                                     end)).to-list()
         is-closure = fvars.length() <> 0
 
+        # Save free variables
+    #    func-fv-sets := link(H.pair(name, fvars), func-fv-sets)
+
         # Lift procedure
         new-body = for fold(base from fbody, vid from fvars):
           AH.h-let(vid, AH.h-env(AC.c-field-name(vid.id)), base)
@@ -617,6 +632,7 @@ end
 # lines of code. 
 fun anf-to-h(prog :: N.AProg):  
   funcs := []
+  func-fv-sets := []
   datas := []
   globals := set([])
   func-names := []
