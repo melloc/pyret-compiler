@@ -385,7 +385,7 @@ fun l-lettable-to-llvm(l :: AL.Lettable, symbols :: FieldSymbolTable, identifier
       a      = base + ".1"
       a-bind = K.LocalVariable(a)
       b      = base + ".2"
-      b-bind = K.LocalVariable(a)
+      b-bind = K.LocalVariable(b)
       H.pair([
         L.Assign(a, L.InsertValue(struct-pyret-value, K.UndefValue, K.Integer(32), K.ConstantInt(type-tag), [0])),
         L.Assign(b, L.InsertValue(struct-pyret-value, a-bind, K.Integer(32), K.ConstantInt(variant-tag.toint()), [1]))
