@@ -20,10 +20,9 @@ data AtomicOrdering:
   | NotAtomic
   | Unordered
   | Monotonic
-  | Invalid
   | Acquire
   | Release
-  | AcqiureRelease
+  | AcquireRelease
   | SequentiallyConsistent
 sharing:
   tostring(self) -> String:
@@ -34,7 +33,6 @@ sharing:
         "unordered"
       | Monotonic =>
         "monotonic"
-      | Invalid =>
       | Acquire =>
         "acquire"
       | Release =>

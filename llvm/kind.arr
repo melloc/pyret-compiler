@@ -21,7 +21,7 @@ data TypeKind:
   | Label
   | Integer(width :: Number)
   | FunctionType(ret :: TypeKind, params :: List<TypeKind>, is-vararg :: Boolean)
-  | Struct(fields :: List<TypeKindField>, packed :: Bool)
+  | Struct(fields :: List<TypeKindField>, packed :: Boolean)
   | Arr(len :: Number, typ :: TypeKind)
   | Pointer(typ :: TypeKind, addrspace :: Option<Number>)
   | Vector(len :: Number, typ :: TypeKind)
@@ -89,12 +89,12 @@ data ValueKind:
   | NullValue
   | Argument
   | BasicBlock
-  | InlineAsm(instructions :: String,
+  | InlineASM(instructions :: String,
               constraints  :: String,
               side-effects :: Boolean,
               align-stack  :: Boolean,
               dialect      :: ASMDialect,
-              metadata     :: Option<ValueKind<is-MDNode>>)
+              metadata     :: Option<ValueKind%(is-MDNode)>)
   | MDNode
   | MDString
   | BlockAddress(function-name :: String, block-name :: String)
@@ -119,14 +119,21 @@ sharing:
   tostring(self) -> String:
     cases(ValueKind) self:
       | NullValue =>
+        raise("NullValue not yet handled") # TODO
       | Argument  =>
+        raise("Argument not yet handled") # TODO
       | BasicBlock =>
-      | InlineAsm(instructions, constraints, side-effects, align-stack, dialect, metadata) =>
+        raise("BasicBlock not yet handled") # TODO
+      | InlineASM(instructions, constraints, side-effects, align-stack, dialect, metadata) =>
+        raise("InlineASM not yet handled") # TODO
       | MDNode   =>
+        raise("MDNode not yet handled") # TODO
       | MDString =>
+        raise("MDString not yet handled") # TODO
       | BlockAddress(function-name, block-name) =>
         "blockaddress(@" + function-name + ", %" + block-name + ")"
       | ConstantAggregateZero =>
+        raise("ConstantAggregateZero not yet handled") # TODO
       | ConstantArray(ty :: TypeKind, values :: List<ValueKind>) =>
         "[ "
           + for map(value from values):
@@ -136,8 +143,11 @@ sharing:
       | ConstantString(val) =>
         "c\"" + val + "\\00\""
       | ConstantDataArray  =>
+        raise("ConstantDataArray not yet handled") # TODO
       | ConstantDataVector =>
+        raise("ConstantDataVector not yet handled") # TODO
       | ConstantFP(value :: Number)  =>
+        raise("ConstantFP not yet handled") # TODO
       | ConstantInt(value :: Number) =>
         value.tostring()
       | ConstantPointerNull =>
@@ -152,8 +162,11 @@ sharing:
             end.join(", ")
           + " }"
       | ConstantVector(ty :: TypeKind, values :: List<ValueKind>) =>
+        raise("ConstantVector not yet handled") # TODO
       | FunctionValue =>
+        raise("FunctionValue not yet handled") # TODO
       | GlobalAlias   =>
+        raise("GlobalAlias not yet handled") # TODO
       | GlobalVariable(id :: String) =>
         "@" + id
       | LocalVariable(id :: String) =>
@@ -252,13 +265,21 @@ sharing:
             end.join-str(", ")
           + ")"
       | Select =>
+        raise("Select not yet handled") # TODO
       | ICmp(cond, val1, val2) =>
+        raise("ICmp not yet handled") # TODO
       | FCmp(cond, val1, val2) =>
+        raise("FCmp not yet handled") # TODO
       | ExtractElement(val, idx) =>
+        raise("ExtractElement not yet handled") # TODO
       | InsertElement(val, idx) =>
+        raise("InsertElement not yet handled") # TODO
       | ShuffleVector =>
+        raise("ShuffleVector not yet handled") # TODO
       | ExtractValue =>
+        raise("ExtractValue not yet handled") # TODO
       | InsertValue =>
+        raise("InsertValue not yet handled") # TODO
     end
   end
 end

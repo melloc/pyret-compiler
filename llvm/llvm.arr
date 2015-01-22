@@ -64,8 +64,8 @@ data ProcedureBlock:
 sharing:
   tostring(self) -> String:
     cases(ProcedureBlock) self:
-      | Procedure(name, type, params, func-attrs, instructions) =>
-        "define " + type.tostring() + " @" + name + "("
+      | Procedure(name, typ, params, func-attrs, instructions) =>
+        "define " + typ.tostring() + " @" + name + "("
           + for map(param from params):
               param.tostring()
             end.join-str(", ")
@@ -292,29 +292,29 @@ data OpCode:
   | Invalid2
   | Unreachable
   # Standard Binary Operators
-  | Add(nuw :: Bool,
-        nsw :: Bool,
+  | Add(nuw :: Boolean,
+        nsw :: Boolean,
         typ :: K.TypeKind,
         op1 :: K.ValueKind,
         op2 :: K.ValueKind)
   | FAdd
-  | Sub(nuw :: Bool,
-        nsw :: Bool,
+  | Sub(nuw :: Boolean,
+        nsw :: Boolean,
         typ :: K.TypeKind,
         op1 :: K.ValueKind,
         op2 :: K.ValueKind)
   | FSub
-  | Mul(nuw :: Bool,
-        nsw :: Bool,
+  | Mul(nuw :: Boolean,
+        nsw :: Boolean,
         typ :: K.TypeKind,
         op1 :: K.ValueKind,
         op2 :: K.ValueKind)
   | FMul
-  | UDiv(exact :: Bool,
+  | UDiv(exact :: Boolean,
          typ   :: K.TypeKind,
          op1   :: K.ValueKind,
          op2   :: K.ValueKind)
-  | SDiv(exact :: Bool,
+  | SDiv(exact :: Boolean,
          typ   :: K.TypeKind,
          op1   :: K.ValueKind,
          op2   :: K.ValueKind)
@@ -327,16 +327,16 @@ data OpCode:
          op2 :: K.ValueKind)
   | FRem
   # Logical Operators
-  | Shl(nuw :: Bool,
-        nsw :: Bool,
+  | Shl(nuw :: Boolean,
+        nsw :: Boolean,
         typ :: K.TypeKind,
         op1 :: K.ValueKind,
         op2 :: K.ValueKind)
-  | LShr(exact :: Bool,
+  | LShr(exact :: Boolean,
          typ   :: K.TypeKind,
          op1   :: K.ValueKind,
          op2   :: K.ValueKind)
-  | AShr(exact :: Bool,
+  | AShr(exact :: Boolean,
          typ   :: K.TypeKind,
          op1   :: K.ValueKind,
          op2   :: K.ValueKind)
@@ -352,23 +352,23 @@ data OpCode:
   # Memory Operators
   | Alloca(typ :: K.TypeKind)
   | Load(typ :: K.TypeKind, ptr :: K.ValueKind)
-  | Store(volatile    :: Bool,  # TODO let's make atomic stores a different type
+  | Store(volatile    :: Boolean,  # TODO let's make atomic stores a different type
           value-typ   :: K.TypeKind,
           value       :: K.ValueKind,
           ptr-typ     :: K.TypeKind,
           ptr         :: K.ValueKind,
           alignment   :: Option<Number>,
           nontemporal :: Option<K.ValueKind>)
-  | StoreAtomic(volatile :: Bool,  # TODO let's make atomic stores a different type
+  | StoreAtomic(volatile :: Boolean,  # TODO let's make atomic stores a different type
                 value-typ :: K.TypeKind,
                 value :: K.ValueKind,
                 ptr-typ :: K.TypeKind,
                 ptr :: K.ValueKind,
-                singlethread :: Bool)
+                singlethread :: Boolean)
                 #ordering ::
                 #alignment ::
                 # TODO TODO TODO
-  | GetElementPtr(inbound :: Bool, pty :: K.TypeKind, val :: K.ValueKind, idxs :: List<Index>)
+  | GetElementPtr(inbound :: Boolean, pty :: K.TypeKind, val :: K.ValueKind, idxs :: List<K.Index>)
   # Cast Operators
   | Trunc
   | ZExt
@@ -392,7 +392,7 @@ data OpCode:
          op1  :: K.ValueKind,
          op2  :: K.ValueKind)
   | PHI(typ   :: K.TypeKind, pairs :: List<H.Pair<K.TypeKind,String>>)
-  | Call(tail   :: Bool,
+  | Call(tail   :: Boolean,
          cconv  :: CallingConvention,
          retty  :: K.TypeKind,
          func   :: K.ValueKind,
@@ -447,8 +447,11 @@ sharing:
                 end + " ] "
             end
       | IndirectBr =>
+        raise("IndirectBr not yet handled") # TODO
       | Invoke =>
+        raise("Invoke not yet handled") # TODO
       | Invalid2 =>
+        raise("Invalid2 not yet handled") # TODO
       | Unreachable =>
         "unreachable"
       | Add(nuw, nsw, typ, op1, op2) =>
@@ -458,6 +461,7 @@ sharing:
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FAdd =>
+        raise("FAdd not yet handled") # TODO
       | Sub(nuw, nsw, typ, op1, op2) =>
         "sub "
           + if nuw: "nuw " else: "" end
@@ -465,6 +469,7 @@ sharing:
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FSub =>
+        raise("FSub not yet handled") # TODO
       | Mul(nuw, nsw, typ, op1, op2) =>
         "mul "
           + if nuw: "nuw " else: "" end
@@ -479,11 +484,13 @@ sharing:
           + typ.tostring() + " "
           + op1.tostring() + ", " + op2.tostring()
       | FDiv =>
+        raise("FDiv not yet handled") # TODO
       | URem(typ, op1, op2) =>
         "urem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
       | SRem(typ, op1, op2) =>
         "srem " + typ.tostring() + " " + op1.tostring() + ", " + op2.tostring()
       | FRem =>
+        raise("FRem not yet handled") # TODO
       | Shl(nuw, nsw, typ, op1, op2) =>
         "shl "
           + if nuw: "nuw " else: "" end
@@ -521,22 +528,34 @@ sharing:
               | some(val) => " !nontemporal !" + val.tostring()
             end
       | StoreAtomic(volatile, value-typ, value, ptr-typ, ptr, singlethread) =>
+        raise("StoreAtomic not yet handled") # TODO
       | GetElementPtr(inbound, pty, val, idxs) =>
         "getelementptr " + if inbound: "inbound " else: "" end + pty.tostring() + "*"
           + for map(idx from idxs):
               idx.tostring()
             end.join-str(", ")
       | Trunc    =>
+        raise("Trunc not yet handled") # TODO
       | ZExt     =>
+        raise("ZExt not yet handled") # TODO
       | SExt     =>
+        raise("SExt not yet handled") # TODO
       | FPToUI   =>
+        raise("FPToUI not yet handled") # TODO
       | FPToSI   =>
+        raise("FPToSI not yet handled") # TODO
       | UIToFP   =>
+        raise("UIToFP not yet handled") # TODO
       | SIToFP   =>
+        raise("SIToFP not yet handled") # TODO
       | FPTrunc  =>
+        raise("FPTrunc not yet handled") # TODO
       | FPExt    =>
+        raise("FPExt not yet handled") # TODO
       | PtrToInt =>
+        raise("PtrToInt not yet handled") # TODO
       | IntToPtr =>
+        raise("IntToPtr not yet handled") # TODO
       | BitCast(from-ty, value, to-ty) =>
         "bitcast " + from-ty.tostring() + " " + value.tostring() + " to " + to-ty.tostring()
       | ICmp(cond, typ, op1, op2) =>
@@ -558,11 +577,17 @@ sharing:
           + typ1.tostring() + " " + val1.tostring() + ", "
           + typ2.tostring() + " " + val2.tostring()
       | UserOp1 =>
+        raise("UserOp1 not yet handled") # TODO
       | UserOp2 =>
+        raise("UserOp2 not yet handled") # TODO
       | VAArg   =>
+        raise("VAArg not yet handled") # TODO
       | ExtractElement =>
+        raise("ExtractElement not yet handled") # TODO
       | InsertElement  =>
+        raise("InsertElement not yet handled") # TODO
       | ShuffleVector  =>
+        raise("ShuffleVector not yet handled") # TODO
       | ExtractValue(aggtyp, val, idxs) =>
         "extractvalue " 
           + aggtyp.tostring() + " " + val.tostring() + ", " 
@@ -577,10 +602,15 @@ sharing:
               idx.tostring()
             end.join-str(", ")
       | Fence          =>
+        raise("Fence not yet handled") # TODO
       | AtomicCmpXchg  =>
+        raise("AtomicCmpXchg not yet handled") # TODO
       | AtomicRMW      =>
+        raise("AtomicRMW not yet handled") # TODO
       | Resume         =>
+        raise("Resume not yet handled") # TODO
       | LandingPad     =>
+        raise("LandingPad not yet handled") # TODO
     end
   end
 end
